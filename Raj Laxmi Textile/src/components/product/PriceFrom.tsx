@@ -29,7 +29,7 @@ export function PriceFrom({
   return (
     <p className={cn("font-sans text-16 text-ink", className)}>
       <span className="tabular-nums">{formatRupees(band.pricePerPiece)}</span>
-      <span className="text-ink/60">
+      <span className="text-ink/70">
         {" "}
         per piece at {formatQuantity(band.minQty)}+
       </span>

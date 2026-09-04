@@ -126,6 +126,32 @@
   }
 }
 
+/*
+ * Clears the fixed header. The value is declared here per breakpoint so the
+ * very first paint is already correct — deriving it only from JS shifted the
+ * hero after hydration and cost ~0.11 CLS. Nav re-measures at runtime, which
+ * matters only after a banner is dismissed.
+ */
+:root {
+  --header-h: 248px;
+}
+
+@media (min-width: 640px) {
+  :root {
+    --header-h: 194px;
+  }
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --header-h: 180px;
+  }
+}
+
+@utility pt-header {
+  padding-top: calc(var(--header-h) + 2rem);
+}
+
 @utility measure {
   max-width: 68ch;
 }

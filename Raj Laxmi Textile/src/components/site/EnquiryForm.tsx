@@ -17,15 +17,22 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/site/Button";
 import { enquirySchema, type EnquiryInput, type EnquiryResponse } from "@/lib/enquiry";
 
-export function EnquiryForm() {
+export function EnquiryForm({ defaultMessage = "" }: { defaultMessage?: string }) {
   const [state, setState] = React.useState<
     { status: "idle" | "sending" } | { status: "sent"; delivered: boolean } | { status: "error"; message: string }
   >({ status: "idle" });
 
   const form = useForm<EnquiryInput>({
     resolver: zodResolver(enquirySchema),
-    defaultValues: { name: "", business: "", phone: "", email: "", message: "" },
+    defaultValues: { name: "", business: "", phone: "", email: "", message: defaultMessage },
   });
+
+  // Keep the message in step with a carton the buyer is still editing, but stop
+  // the moment they type their own — their words win.
+  const messageDirty = form.formState.dirtyFields.message;
+  React.useEffect(() => {
+    if (!messageDirty) form.setValue("message", defaultMessage);
+  }, [defaultMessage, messageDirty, form]);
 
   async function onSubmit(values: EnquiryInput) {
     setState({ status: "sending" });
@@ -59,7 +66,7 @@ export function EnquiryForm() {
           usually the same day.
         </p>
         {!state.delivered ? (
-          <p className="mt-3 text-14 text-ink/60">
+          <p className="mt-3 text-14 text-ink/70">
             This is a preview build, so nothing was actually sent. On the live
             site this enquiry would reach the unit by email.
           </p>

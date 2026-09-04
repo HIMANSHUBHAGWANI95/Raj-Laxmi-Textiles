@@ -7,6 +7,8 @@
 export type Colourway = {
   slug: string;
   name: string;
+  /** What the shade is called on the floor and on a rate list. */
+  tradeName: string;
   /** The saturated ground the field is printed in. */
   field: string;
   /** Pinstripe colour laid over the field. */
@@ -22,6 +24,7 @@ export type Colourway = {
 export const COLOURWAYS: Colourway[] = [
   {
     slug: "indigo",
+    tradeName: "Neel",
     name: "Indigo",
     field: "#1E3A6B",
     stripe: "#14243F",
@@ -31,6 +34,7 @@ export const COLOURWAYS: Colourway[] = [
   },
   {
     slug: "madder",
+    tradeName: "Majith",
     name: "Madder Red",
     field: "#9E2B2B",
     stripe: "#7A1F1F",
@@ -40,6 +44,7 @@ export const COLOURWAYS: Colourway[] = [
   },
   {
     slug: "marigold",
+    tradeName: "Genda",
     name: "Marigold",
     field: "#DE9412",
     stripe: "#B4760C",
@@ -49,6 +54,7 @@ export const COLOURWAYS: Colourway[] = [
   },
   {
     slug: "leaf",
+    tradeName: "Mehndi",
     name: "Leaf Green",
     field: "#3F6B39",
     stripe: "#2C4E28",
@@ -58,6 +64,7 @@ export const COLOURWAYS: Colourway[] = [
   },
   {
     slug: "cobalt",
+    tradeName: "Firozi",
     name: "Cobalt",
     field: "#2F5AA8",
     stripe: "#234682",

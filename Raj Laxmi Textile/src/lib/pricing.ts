@@ -83,7 +83,12 @@ export function volumeBand(product: PricedItem): PriceBand {
  * Rate-band filters for the collections grid
  * ------------------------------------------------------------------ */
 
-export type RateBandValue = "all" | "under-200" | "200-350" | "over-350";
+export type RateBandValue =
+  | "all"
+  | "under-200"
+  | "200-300"
+  | "300-400"
+  | "above-400";
 
 export type RateBandFilter = {
   value: RateBandValue;
@@ -94,11 +99,13 @@ export type RateBandFilter = {
 };
 
 /** Thresholds only — the labels are formatted in components/product/. */
+/** Aligned with the rate facet group in src/content/facets.ts. */
 export const RATE_BAND_FILTERS: RateBandFilter[] = [
   { value: "all", min: null, max: null },
   { value: "under-200", min: null, max: 200 },
-  { value: "200-350", min: 200, max: 350 },
-  { value: "over-350", min: 350, max: null },
+  { value: "200-300", min: 200, max: 300 },
+  { value: "300-400", min: 300, max: 400 },
+  { value: "above-400", min: 400, max: null },
 ];
 
 /**

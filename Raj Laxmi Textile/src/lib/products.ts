@@ -86,17 +86,25 @@ export function patternBySlug(slug: string): Pattern {
  * Products
  * -------------------------------------------------------------------- */
 
-export type ProductCategory =
-  | "sanganeri-floral"
+/** The print family a product belongs to — the primary taxonomy. */
+export type PrintFacet =
+  | "sanganeri"
+  | "jaipuri-floral"
+  | "bel-buti"
   | "striped-border"
-  | "jaipuri-bel-buti"
-  | "discharge-print";
+  | "discharge"
+  | "bagru";
 
-export const CATEGORY_LABELS: Record<ProductCategory, string> = {
-  "sanganeri-floral": "Sanganeri floral",
-  "striped-border": "Striped border",
-  "jaipuri-bel-buti": "Jaipuri bel-buti",
-  "discharge-print": "Discharge print",
+/**
+ * Facet tags. `print` is single-valued; the rest are arrays because a product
+ * genuinely belongs under several (a 90x100 sheet is both double and queen).
+ * The rate facet is not stored — it is derived from the entry rate.
+ */
+export type ProductFacets = {
+  print: PrintFacet;
+  fabric: string[];
+  size: string[];
+  use: string[];
 };
 
 export type ProductSize = "single" | "double-queen" | "king";
@@ -122,6 +130,8 @@ export const SIZE_CONTENTS: Record<ProductSize, string> = {
 export type FabricSpec = {
   composition: string;
   construction: string;
+  /** Threads per square inch, warp plus weft. */
+  threadCount: number;
   gsm: number;
   print: string;
   screens: number;
@@ -133,6 +143,7 @@ export type FabricSpec = {
 const STANDARD = (screens: number): FabricSpec => ({
   composition: "100% cotton",
   construction: "60 x 60 combed",
+  threadCount: 120,
   gsm: 120,
   print: "Hand screen print, table printed",
   screens,
@@ -144,6 +155,7 @@ const STANDARD = (screens: number): FabricSpec => ({
 const PREMIUM = (screens: number): FabricSpec => ({
   composition: "100% cotton",
   construction: "60 x 60 combed",
+  threadCount: 144,
   gsm: 144,
   print: "Hand screen print, table printed",
   screens,
@@ -155,11 +167,43 @@ const PREMIUM = (screens: number): FabricSpec => ({
 const DISCHARGE = (screens: number): FabricSpec => ({
   composition: "100% cotton",
   construction: "60 x 60 combed",
+  threadCount: 144,
   gsm: 144,
   print: "Discharge screen print on a piece-dyed ground",
   screens,
   shrinkage: "Pre-shrunk, 3–4% residual shrinkage",
   dyes: "Reactive ground, discharge paste for the white",
+});
+
+/** Weave variants. Same cotton, different construction — see the fabric facet. */
+const SATEEN = (screens: number): FabricSpec => ({
+  ...PREMIUM(screens),
+  construction: "Cotton sateen, 60s combed warp",
+  threadCount: 210,
+});
+
+const TWILL = (screens: number): FabricSpec => ({
+  ...STANDARD(screens),
+  construction: "Cotton twill, 3/1 weave",
+  threadCount: 144,
+});
+
+const PERCALE_STANDARD = (screens: number): FabricSpec => ({
+  ...STANDARD(screens),
+  construction: "Percale, close plain weave",
+  threadCount: 180,
+});
+
+const PERCALE_PREMIUM = (screens: number): FabricSpec => ({
+  ...PREMIUM(screens),
+  construction: "Percale, close plain weave",
+  threadCount: 200,
+});
+
+const DISCHARGE_TWILL = (screens: number): FabricSpec => ({
+  ...DISCHARGE(screens),
+  construction: "Cotton twill, 3/1 weave",
+  threadCount: 152,
 });
 
 export type PriceBand = {
@@ -172,7 +216,11 @@ export type PriceBand = {
 export type Product = {
   slug: string;
   name: string;
-  category: ProductCategory;
+  /** Order code used on the rate list and the bale tag. */
+  code: string;
+  /** The name the design is called by on the floor. */
+  nameHindi: string;
+  facets: ProductFacets;
   size: ProductSize;
   /** The artwork the swatch generator draws for this product. */
   pattern: string;
@@ -198,7 +246,14 @@ export const PRODUCTS: Product[] = [
   {
     slug: "sanganeri-booti-jaal-double",
     name: "Sanganeri Booti Jaal",
-    category: "sanganeri-floral",
+    code: "RLT-SBJ-90",
+    nameHindi: "सांगानेरी बूटी जाल",
+    facets: {
+      print: "sanganeri",
+      fabric: ["pure-cotton", "combed-60x60"],
+      size: ["double", "queen"],
+      use: ["retail-counter", "hotel-institutional"],
+    },
     size: "double-queen",
     pattern: "sanganeri-floral",
     colourwaySet: "full",
@@ -223,7 +278,14 @@ export const PRODUCTS: Product[] = [
   {
     slug: "sanganeri-phool-bel-single",
     name: "Sanganeri Phool Bel",
-    category: "sanganeri-floral",
+    code: "RLT-SPB-60",
+    nameHindi: "सांगानेरी फूल बेल",
+    facets: {
+      print: "sanganeri",
+      fabric: ["pure-cotton", "combed-60x60"],
+      size: ["single"],
+      use: ["retail-counter", "hotel-institutional"],
+    },
     size: "single",
     pattern: "sanganeri-floral",
     colourwaySet: "warm",
@@ -248,11 +310,18 @@ export const PRODUCTS: Product[] = [
   {
     slug: "sanganeri-angoor-vine-king",
     name: "Sanganeri Angoor Vine",
-    category: "sanganeri-floral",
+    code: "RLT-SAV-108",
+    nameHindi: "सांगानेरी अंगूर बेल",
+    facets: {
+      print: "jaipuri-floral",
+      fabric: ["pure-cotton", "cotton-satin"],
+      size: ["king", "super-king"],
+      use: ["festive-gifting", "export"],
+    },
     size: "king",
     pattern: "sanganeri-floral",
     colourwaySet: "cool",
-    fabric: PREMIUM(11),
+    fabric: SATEEN(11),
     description:
       "A trailing vine repeat drawn large for king sizes, where a small buti would read as noise across the width.",
     handNote:
@@ -271,19 +340,26 @@ export const PRODUCTS: Product[] = [
     priceNote: EX_JAIPUR,
   },
   {
-    slug: "sanganeri-chhoti-booti-double",
-    name: "Sanganeri Chhoti Booti",
-    category: "sanganeri-floral",
+    slug: "bagru-chhoti-booti-double",
+    name: "Bagru Chhoti Booti",
+    code: "RLT-BCB-90",
+    nameHindi: "बगरू छोटी बूटी",
+    facets: {
+      print: "bagru",
+      fabric: ["pure-cotton", "combed-60x60"],
+      size: ["double", "queen"],
+      use: ["retail-counter", "export"],
+    },
     size: "double-queen",
     pattern: "jaipuri-buti",
     colourwaySet: "full",
     fabric: STANDARD(8),
     description:
-      "A small-scale booti on a tight stripe. The least busy design in the range, and the one most often taken in mixed assortments.",
+      "A small-scale booti in the Bagru manner: black and madder on an ochre ground, drawn slightly irregular so it reads as resist work rather than a clean screen.",
     handNote:
-      "120 GSM 60x60 combed cotton, the same base as our other standard doubles.",
+      "120 GSM 60x60 combed cotton, the same base as our other standard doubles. The ochre ground is piece-dyed before printing, so the cloth carries slightly more body than a white-ground sheet.",
     registrationNote:
-      "Eight screens. Because the booti is small, a slight variance in placement between table lengths is visible if two sheets are laid side by side.",
+      "Eight screens, cut deliberately loose. A true Bagru is block-printed with mud resist and never lands perfectly; the drawing here imitates that irregularity, and we do not claim it as dabu work.",
     fastnessNote:
       "Reactive dyes. Holds shade through domestic washing; avoid drying dark colourways in direct sun for long periods.",
     priceBands: [
@@ -300,11 +376,18 @@ export const PRODUCTS: Product[] = [
   {
     slug: "dhari-border-classic-single",
     name: "Dhari Border Classic",
-    category: "striped-border",
+    code: "RLT-DBC-60",
+    nameHindi: "धारी बॉर्डर क्लासिक",
+    facets: {
+      print: "striped-border",
+      fabric: ["pure-cotton", "percale"],
+      size: ["single"],
+      use: ["retail-counter", "hotel-institutional"],
+    },
     size: "single",
     pattern: "lehariya-wave",
     colourwaySet: "full",
-    fabric: STANDARD(8),
+    fabric: PERCALE_STANDARD(8),
     description:
       "A plain striped field with the printed border doing all the work. The cheapest sheet we make that still uses eight screens.",
     handNote:
@@ -325,7 +408,14 @@ export const PRODUCTS: Product[] = [
   {
     slug: "dhari-border-wide-double",
     name: "Dhari Border Wide",
-    category: "striped-border",
+    code: "RLT-DBW-90",
+    nameHindi: "धारी बॉर्डर चौड़ा",
+    facets: {
+      print: "striped-border",
+      fabric: ["pure-cotton", "combed-60x60"],
+      size: ["double", "queen"],
+      use: ["retail-counter", "hotel-institutional"],
+    },
     size: "double-queen",
     pattern: "lehariya-wave",
     colourwaySet: "cool",
@@ -350,11 +440,18 @@ export const PRODUCTS: Product[] = [
   {
     slug: "dhari-border-king",
     name: "Dhari Border King",
-    category: "striped-border",
+    code: "RLT-DBK-108",
+    nameHindi: "धारी बॉर्डर किंग",
+    facets: {
+      print: "striped-border",
+      fabric: ["pure-cotton", "twill-cotton"],
+      size: ["king"],
+      use: ["hotel-institutional", "export"],
+    },
     size: "king",
     pattern: "lehariya-wave",
     colourwaySet: "warm",
-    fabric: STANDARD(9),
+    fabric: TWILL(9),
     description:
       "The border design at king width, where the stripe block is proportionally narrower against the field.",
     handNote:
@@ -377,7 +474,14 @@ export const PRODUCTS: Product[] = [
   {
     slug: "jaipuri-bel-buti-double",
     name: "Jaipuri Bel Buti",
-    category: "jaipuri-bel-buti",
+    code: "RLT-JBB-90",
+    nameHindi: "जयपुरी बेल बूटी",
+    facets: {
+      print: "bel-buti",
+      fabric: ["pure-cotton", "combed-60x60"],
+      size: ["double", "queen"],
+      use: ["retail-counter", "festive-gifting"],
+    },
     size: "double-queen",
     pattern: "jaipuri-buti",
     colourwaySet: "full",
@@ -402,11 +506,18 @@ export const PRODUCTS: Product[] = [
   {
     slug: "jaipuri-kali-buti-single",
     name: "Jaipuri Kali Buti",
-    category: "jaipuri-bel-buti",
+    code: "RLT-JKB-60",
+    nameHindi: "जयपुरी कली बूटी",
+    facets: {
+      print: "bel-buti",
+      fabric: ["pure-cotton", "percale"],
+      size: ["single"],
+      use: ["retail-counter", "festive-gifting"],
+    },
     size: "single",
     pattern: "tulip-bel",
     colourwaySet: "full",
-    fabric: PREMIUM(9),
+    fabric: PERCALE_PREMIUM(9),
     description:
       "A bud repeat on a close stripe, printed on premium cloth. Our only single in the 144 GSM quality.",
     handNote:
@@ -427,11 +538,18 @@ export const PRODUCTS: Product[] = [
   {
     slug: "jaipuri-bel-grand-king",
     name: "Jaipuri Bel Grand",
-    category: "jaipuri-bel-buti",
+    code: "RLT-JBG-108",
+    nameHindi: "जयपुरी बेल ग्रैंड",
+    facets: {
+      print: "jaipuri-floral",
+      fabric: ["pure-cotton", "cotton-satin"],
+      size: ["king", "super-king"],
+      use: ["festive-gifting", "export"],
+    },
     size: "king",
     pattern: "tulip-bel",
     colourwaySet: "cool",
-    fabric: PREMIUM(11),
+    fabric: SATEEN(11),
     description:
       "The bel-buti drawing enlarged for king beds, with a deeper border and a wider spacing between butis.",
     handNote:
@@ -454,11 +572,18 @@ export const PRODUCTS: Product[] = [
   {
     slug: "discharge-indigo-buti-double",
     name: "Discharge Indigo Buti",
-    category: "discharge-print",
+    code: "RLT-DIB-90",
+    nameHindi: "डिस्चार्ज नील बूटी",
+    facets: {
+      print: "discharge",
+      fabric: ["pure-cotton", "twill-cotton"],
+      size: ["double", "queen"],
+      use: ["export", "hotel-institutional"],
+    },
     size: "double-queen",
     pattern: "jaipuri-buti",
     colourwaySet: "indigo-pair",
-    fabric: DISCHARGE(9),
+    fabric: DISCHARGE_TWILL(9),
     description:
       "The cloth is dyed indigo first and the motif bleached back out of it, so the white comes from the ground rather than a white screen.",
     handNote:
@@ -479,7 +604,14 @@ export const PRODUCTS: Product[] = [
   {
     slug: "discharge-madder-jaal-double",
     name: "Discharge Madder Jaal",
-    category: "discharge-print",
+    code: "RLT-DMJ-90",
+    nameHindi: "डिस्चार्ज मजीठ जाल",
+    facets: {
+      print: "discharge",
+      fabric: ["pure-cotton", "combed-60x60"],
+      size: ["double", "queen"],
+      use: ["export", "festive-gifting"],
+    },
     size: "double-queen",
     pattern: "sanganeri-floral",
     colourwaySet: "warm",

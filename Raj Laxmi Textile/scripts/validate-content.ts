@@ -8,18 +8,23 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
-import { PRODUCTS, PATTERNS, CATEGORY_LABELS, type Product } from "../src/lib/products";
+import { PRODUCTS, PATTERNS, type Product } from "../src/lib/products";
+import { FACET_GROUPS } from "../src/content/facets";
+import { facetCount } from "../src/lib/facetQueries";
 import { COLOURWAYS, COLOURWAY_SETS, type ColourwaySetName } from "../src/lib/colourways";
 import { FAQS } from "../src/lib/faqs";
 import { swatchPath } from "../src/lib/products";
 
 const EXPECTED_PRODUCT_COUNT = 12;
 
-const EXPECTED_PER_CATEGORY: Record<string, number> = {
-  "sanganeri-floral": 4,
+/** Print families and how many products each should carry. */
+const EXPECTED_PER_PRINT: Record<string, number> = {
+  sanganeri: 2,
+  "jaipuri-floral": 2,
+  "bel-buti": 2,
   "striped-border": 3,
-  "jaipuri-bel-buti": 3,
-  "discharge-print": 2,
+  discharge: 2,
+  bagru: 1,
 };
 
 const errors: string[] = [];
@@ -120,16 +125,48 @@ function validatePriceBands(product: Product) {
 
 /* ---------------- category spread ---------------- */
 
-for (const [category, expected] of Object.entries(EXPECTED_PER_CATEGORY)) {
-  const actual = PRODUCTS.filter((p) => p.category === category).length;
+for (const [print, expected] of Object.entries(EXPECTED_PER_PRINT)) {
+  const actual = PRODUCTS.filter((p) => p.facets.print === print).length;
   if (actual !== expected) {
-    fail(`Expected ${expected} products in "${category}", found ${actual}.`);
+    fail(`Expected ${expected} products in print family "${print}", found ${actual}.`);
   }
 }
 
-for (const product of PRODUCTS) {
-  if (!(product.category in CATEGORY_LABELS)) {
-    fail(`${product.slug}: unknown category "${product.category}".`);
+/* ---------------- facets ---------------- */
+
+// Every facet value must have at least one product, or the nav and footer
+// would link to a route that 404s. This is what guarantees no dead links.
+for (const group of FACET_GROUPS) {
+  for (const value of group.values) {
+    if (facetCount(group.id, value.slug) === 0) {
+      fail(
+        `Facet ${group.id}/${value.slug} has no products — its nav and footer links would 404.`,
+      );
+    }
+  }
+}
+
+// Facet copy must be distinct: duplicated hero lines or paragraphs across
+// facet pages is what makes a catalogue read as machine-generated.
+const seenCopy = new Map<string, string>();
+for (const group of FACET_GROUPS) {
+  for (const value of group.values) {
+    for (const [field, text] of [
+      ["heroLine", value.heroLine],
+      ["title", value.title],
+      ["metaDescription", value.metaDescription],
+      ["body[0]", value.body[0]],
+      ["body[1]", value.body[1]],
+    ] as const) {
+      const key = text.trim().toLowerCase();
+      const where = `${group.id}/${value.slug} ${field}`;
+      const previous = seenCopy.get(key);
+      if (previous) {
+        fail(`Duplicate facet copy: ${where} repeats ${previous}.`);
+      } else {
+        seenCopy.set(key, where);
+      }
+    }
   }
 }
 

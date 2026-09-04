@@ -120,6 +120,7 @@ export const PRODUCT_IMAGE_SIZES = {
   flat: { width: 1600, height: 1200 },
   stack: { width: 1600, height: 1200 },
   detail: { width: 1200, height: 1200 },
+  drape: { width: 1400, height: 1050 },
 } as const;
 
 export type ProductImageType = keyof typeof PRODUCT_IMAGE_SIZES;

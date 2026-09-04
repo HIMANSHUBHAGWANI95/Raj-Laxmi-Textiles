@@ -6,13 +6,8 @@
  * src/components/site/Price.tsx — see src/lib/flags.ts.
  */
 
-import {
-  CATEGORY_LABELS,
-  PRODUCTS,
-  type PriceBand,
-  type Product,
-  type ProductCategory,
-} from "./products";
+import { PRODUCTS, type PriceBand, type Product, type PrintFacet } from "./products";
+import { FACET_GROUPS } from "@/content/facets";
 import { colourwaysInSet, type Colourway } from "./colourways";
 
 export function getProduct(slug: string): Product | undefined {
@@ -25,21 +20,32 @@ export function requireProduct(slug: string): Product {
   return product;
 }
 
-export function productsByCategory(category: ProductCategory): Product[] {
-  return PRODUCTS.filter((p) => p.category === category);
+export function productsByPrint(print: PrintFacet): Product[] {
+  return PRODUCTS.filter((p) => p.facets.print === print);
 }
 
-/** Categories in display order, each with the products in it. */
-export function groupedByCategory(): Array<{
-  category: ProductCategory;
+/** The label for a print family, taken from the facet definitions. */
+export function printLabel(print: PrintFacet): string {
+  const group = FACET_GROUPS.find((g) => g.id === "print");
+  return group?.values.find((v) => v.slug === print)?.label ?? print;
+}
+
+/** Print families in facet order, each with the products in it. */
+export function groupedByPrint(): Array<{
+  print: PrintFacet;
   label: string;
   products: Product[];
 }> {
-  return (Object.keys(CATEGORY_LABELS) as ProductCategory[]).map((category) => ({
-    category,
-    label: CATEGORY_LABELS[category],
-    products: productsByCategory(category),
-  }));
+  const group = FACET_GROUPS.find((g) => g.id === "print");
+  if (!group) return [];
+
+  return group.values
+    .map((value) => ({
+      print: value.slug as PrintFacet,
+      label: value.label,
+      products: productsByPrint(value.slug as PrintFacet),
+    }))
+    .filter((entry) => entry.products.length > 0);
 }
 
 export function productColourways(product: Product): Colourway[] {

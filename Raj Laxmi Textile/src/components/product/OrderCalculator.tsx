@@ -18,6 +18,8 @@ import { formatQuantity, formatRupees, formatRupeesExact } from "./currency";
 export type CalculatorOption = {
   slug: string;
   name: string;
+  /** Order code, so the message we receive names the exact design. */
+  code: string;
   sizeLabel: string;
   /** What the select shows — includes the design name when sizes collide. */
   optionLabel: string;
@@ -49,16 +51,17 @@ export function OrderCalculator({
   const message = totals
     ? [
         `Enquiry from the website.`,
-        `Design: ${selected.name} (${selected.sizeLabel})`,
+        `Design: ${selected.name} (${selected.code})`,
+        `Size: ${selected.sizeLabel}`,
         `Quantity: ${formatQuantity(totals.quantity)} pieces`,
         `Rate: ${formatRupees(totals.ratePerPiece)} per piece`,
-        `Subtotal: ${formatRupees(totals.subtotal)}`,
+        `Line total: ${formatRupees(totals.subtotal)}`,
         `GST at 5%: ${formatRupeesExact(totals.gst)}`,
-        `Total: ${formatRupeesExact(totals.total)}`,
+        `Grand total: ${formatRupeesExact(totals.total)}`,
         ``,
         `Please confirm availability and rates.`,
       ].join("\n")
-    : `Enquiry from the website. Please send rates for ${selected.name} (${selected.sizeLabel}).`;
+    : `Enquiry from the website. Please send rates for ${selected.name} (${selected.code}), ${selected.sizeLabel}.`;
 
   const href = `${whatsappBase}?text=${encodeURIComponent(message)}`;
   const quantityId = React.useId();
@@ -127,7 +130,7 @@ export function OrderCalculator({
                 </dd>
               </div>
               <div className="mt-1 flex justify-between gap-6 border-t border-ink/20 pt-1">
-                <dt className="font-semibold text-ink">Total</dt>
+                <dt className="font-semibold text-ink">Grand total</dt>
                 <dd className="tabular-nums font-semibold text-indigo-600">
                   {formatRupeesExact(totals.total)}
                 </dd>
@@ -149,7 +152,7 @@ export function OrderCalculator({
       </div>
 
       {upgrade ? (
-        <p className="mt-4 text-14 text-ink/60">
+        <p className="mt-4 text-14 text-ink/70">
           {formatQuantity(upgrade.piecesAway)} more pieces reaches{" "}
           {formatRupees(upgrade.band.pricePerPiece)} per piece.
         </p>

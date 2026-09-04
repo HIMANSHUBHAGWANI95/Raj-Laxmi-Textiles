@@ -54,7 +54,7 @@ export default function StyleguidePage() {
         headingLevel="h1"
         title="Styleguide"
         intro="Every token, type size, component state and generated swatch in one place. This page is noindex."
-        className="pt-32 md:pt-40"
+        className="pt-header"
       />
 
       <Section tone="ivory" title="Palette">
@@ -80,7 +80,7 @@ export default function StyleguidePage() {
         <div className="space-y-8">
           {TYPE_SCALE.map((step) => (
             <div key={step.size} className="border-b border-ink/10 pb-6">
-              <p className="text-14 text-ink/60">
+              <p className="text-14 text-ink/70">
                 {step.size}px — {step.face}
               </p>
               <p
@@ -101,7 +101,7 @@ export default function StyleguidePage() {
         </Note>
 
         <div className="mt-10">
-          <p className="text-14 text-ink/60">Devanagari — Tiro Devanagari Hindi</p>
+          <p className="text-14 text-ink/70">Devanagari — Tiro Devanagari Hindi</p>
           <p lang="hi" className="deva mt-2 text-36 text-indigo-600">
             राज लक्ष्मी टेक्सटाइल्स
           </p>
@@ -131,7 +131,7 @@ export default function StyleguidePage() {
                 className={
                   variant === "link-underline-inverse"
                     ? "text-14 text-ivory/60"
-                    : "text-14 text-ink/60"
+                    : "text-14 text-ink/70"
                 }
               >
                 {variant}
@@ -180,7 +180,7 @@ export default function StyleguidePage() {
       <Section tone="ivory" title="BorderRail">
         <div className="grid gap-12 lg:grid-cols-2">
           <div>
-            <p className="text-14 text-ink/60">vertical, tone ivory / sand / indigo</p>
+            <p className="text-14 text-ink/70">vertical, tone ivory / sand / indigo</p>
             <div className="mt-4 flex gap-8">
               <BorderRail orientation="vertical" length={280} tone="ivory" responsive={false} />
               <div className="bg-sand p-4">
@@ -193,7 +193,7 @@ export default function StyleguidePage() {
           </div>
 
           <div>
-            <p className="text-14 text-ink/60">horizontal</p>
+            <p className="text-14 text-ink/70">horizontal</p>
             <div className="mt-4 space-y-6">
               <BorderRail orientation="horizontal" length={520} tone="ivory" responsive={false} className="w-full" />
               <div className="bg-indigo-900 p-4">
@@ -201,7 +201,7 @@ export default function StyleguidePage() {
               </div>
             </div>
 
-            <p className="mt-10 text-14 text-ink/60">
+            <p className="mt-10 text-14 text-ink/70">
               the 6px rule it collapses to below md
             </p>
             <div className="mt-4 space-y-4">
@@ -248,12 +248,12 @@ export default function StyleguidePage() {
 
         <div className="mt-8 grid gap-10 lg:grid-cols-2">
           <div>
-            <p className="text-14 text-ink/60">PriceFrom</p>
+            <p className="text-14 text-ink/70">PriceFrom</p>
             <PriceFrom product={PRODUCTS[0]} className="mt-2" />
             <IndicativeRetail product={PRODUCTS[0]} className="mt-2" />
           </div>
           <div>
-            <p className="text-14 text-ink/60">PriceBands</p>
+            <p className="text-14 text-ink/70">PriceBands</p>
             <PriceBands product={PRODUCTS[0]} className="mt-2 max-w-md" />
           </div>
         </div>
@@ -299,7 +299,7 @@ export default function StyleguidePage() {
                               height={1200}
                               className="w-full"
                             />
-                            <figcaption className="mt-2 text-14 text-ink/60">{type}</figcaption>
+                            <figcaption className="mt-2 text-14 text-ink/70">{type}</figcaption>
                           </figure>
                         ))}
                       </div>

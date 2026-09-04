@@ -539,6 +539,9 @@ function buildDetail(product: Pattern, cw: Colourway) {
 
   <rect width="${S}" height="${S}" fill="url(#${id}-field)"/>
 
+  <!-- the border panel running down the left, at close range -->
+  ${borderPanel(0, 0, 300, S, cw, rng, 1.9)}
+
   <!-- the scalloped wave at full scale, showing the screen's edge -->
   <g transform="translate(0 ${n(S * 0.66)})">
     <path d="${scallopWavePath(S, 170, 30)}" fill="none" stroke="${cw.motif}" stroke-width="16"/>
@@ -559,6 +562,86 @@ function buildDetail(product: Pattern, cw: Colourway) {
 
   <rect width="${S}" height="${S}" fill="url(#${id}-threads)"/>
   <rect width="${S}" height="${S}" filter="url(#${id}-weave)" opacity="0.13"/>
+</svg>`;
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 4. drape — the cloth hung, so the print reads over folds
+ * ------------------------------------------------------------------ */
+
+function buildDrape(product: Pattern, cw: Colourway) {
+  const rng = makeRng(`${product.slug}-${cw.slug}-drape`);
+  const W = 1400;
+  const H = 1050;
+  const id = "r";
+  const seed = hashString(`${product.slug}${cw.slug}drape`) % 1000;
+
+  const clothX = 90;
+  const clothW = W - clothX * 2;
+  const clothTop = 60;
+
+  // A wavy hem: the cloth is hanging, so the bottom edge is not a straight line.
+  const hemY = H - 250;
+  let hem = `M ${clothX} ${clothTop} L ${clothX + clothW} ${clothTop} L ${clothX + clothW} ${hemY} `;
+  const lobes = 7;
+  for (let i = lobes; i > 0; i -= 1) {
+    const x0 = clothX + (clothW * i) / lobes;
+    const x1 = clothX + (clothW * (i - 1)) / lobes;
+    const dip = rng.range(70, 150);
+    hem += `Q ${n((x0 + x1) / 2)} ${n(hemY + dip)} ${n(x1)} ${n(hemY + rng.range(-30, 30))} `;
+  }
+  hem += "Z";
+
+  // Fold shading: alternating light and dark bands down the cloth.
+  const folds: string[] = [];
+  const foldCount = 7;
+  for (let i = 0; i < foldCount; i += 1) {
+    const fx = clothX + (clothW * i) / foldCount;
+    const fw = clothW / foldCount;
+    const dark = i % 2 === 0;
+    folds.push(
+      `<rect x="${n(fx)}" y="${clothTop}" width="${n(fw)}" height="${H}" fill="url(#${id}-fold-${dark ? "d" : "l"})" opacity="${dark ? 1 : 0.9}"/>`,
+    );
+  }
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+  <defs>
+    ${fieldPattern(`${id}-field`, cw, product.stripePitch)}
+    ${textureDefs(id, seed)}
+    <clipPath id="${id}-clothshape"><path d="${hem}"/></clipPath>
+    <linearGradient id="${id}-fold-d" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#1A1614" stop-opacity="0.46"/>
+      <stop offset="0.5" stop-color="#1A1614" stop-opacity="0"/>
+      <stop offset="1" stop-color="#1A1614" stop-opacity="0.38"/>
+    </linearGradient>
+    <linearGradient id="${id}-fold-l" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0.40"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="${W}" height="${H}" fill="#EDE7DC"/>
+
+  <g filter="url(#${id}-cloth)">
+    <path d="${hem}" fill="${cw.field}"/>
+  </g>
+  <g clip-path="url(#${id}-clothshape)">
+    <rect x="${clothX}" y="${clothTop}" width="${clothW}" height="${H}" fill="url(#${id}-field)"/>
+    <g transform="translate(${clothX + 210} ${clothTop})">
+      ${scatterField(clothW - 210, H - clothTop, product, cw, rng, 0.62)}
+    </g>
+    ${borderPanel(clothX, clothTop, 200, H - clothTop, cw, rng, 0.95)}
+
+    <!-- the folds sit over the print, as they would on hanging cloth -->
+    ${folds.join("\n    ")}
+
+    <rect x="${clothX}" y="${clothTop}" width="${clothW}" height="${H}" fill="url(#${id}-threads)"/>
+    <rect x="${clothX}" y="${clothTop}" width="${clothW}" height="${H}" filter="url(#${id}-weave)" opacity="0.10"/>
+  </g>
+
+  <path d="${hem}" fill="none" stroke="#1A1614" stroke-opacity="0.14" stroke-width="2"/>
 </svg>`;
 }
 
@@ -588,8 +671,9 @@ async function main() {
       await render(buildFlat(product, cw), path.join(dir, `${slug}-flat.webp`));
       await render(buildStack(product, cw), path.join(dir, `${slug}-stack.webp`));
       await render(buildDetail(product, cw), path.join(dir, `${slug}-detail.webp`));
-      count += 3;
-      process.stdout.write(`  ${product.slug}/${slug} — flat, stack, detail\n`);
+      await render(buildDrape(product, cw), path.join(dir, `${slug}-drape.webp`));
+      count += 4;
+      process.stdout.write(`  ${product.slug}/${slug} — flat, stack, detail, drape\n`);
     }
   }
 

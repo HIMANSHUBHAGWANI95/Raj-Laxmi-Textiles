@@ -37,13 +37,13 @@ export function PriceBands({
           <tr>
             <th
               scope="col"
-              className="border-b border-ink/15 py-2 pr-8 text-left text-14 font-normal text-ink/60"
+              className="border-b border-ink/15 py-2 pr-8 text-left text-14 font-normal text-ink/70"
             >
               Quantity
             </th>
             <th
               scope="col"
-              className="border-b border-ink/15 py-2 text-right text-14 font-normal text-ink/60"
+              className="border-b border-ink/15 py-2 text-right text-14 font-normal text-ink/70"
             >
               Per piece
             </th>
@@ -77,7 +77,7 @@ export function PriceBands({
         </tbody>
       </table>
 
-      <p className="mt-3 text-14 text-ink/60">
+      <p className="mt-3 text-14 text-ink/70">
         {product.priceNote}. Rates indicative and confirmed on enquiry.
       </p>
     </div>
@@ -95,7 +95,7 @@ export function IndicativeRetail({
   if (!SHOW_PRICES || !product.mrp) return null;
 
   return (
-    <p className={cn("text-14 text-ink/60", className)}>
+    <p className={cn("text-14 text-ink/70", className)}>
       Typical retail: {formatRupees(product.mrp)}
     </p>
   );
