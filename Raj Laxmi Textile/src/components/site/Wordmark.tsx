@@ -12,7 +12,7 @@ export function Wordmark({
     <span className={cn("flex flex-col leading-none", className)}>
       <span
         className={cn(
-          "display-wonk text-22 font-semibold tracking-[-0.01em]",
+          "display-wonk text-18 font-semibold tracking-[-0.01em] whitespace-nowrap sm:text-22",
           tone === "light" ? "text-ivory" : "text-indigo-900",
         )}
       >

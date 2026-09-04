@@ -58,7 +58,7 @@ export function AnnouncementBar() {
           type="button"
           onClick={() => setDismissed(true)}
           aria-label={`Dismiss announcements from ${BUSINESS.name}`}
-          className="inline-flex size-7 shrink-0 items-center justify-center rounded-[2px] text-ivory/60 transition-colors hover:bg-ivory/10 hover:text-ivory focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marigold"
+          className="inline-flex size-11 shrink-0 items-center justify-center rounded-[2px] text-ivory/60 transition-colors hover:bg-ivory/10 hover:text-ivory focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marigold"
         >
           <XIcon className="size-4" />
         </button>

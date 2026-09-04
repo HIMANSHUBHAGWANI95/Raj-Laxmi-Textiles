@@ -59,7 +59,7 @@ function FilterLink({
       href={href}
       aria-current={active ? "true" : undefined}
       className={cn(
-        "inline-flex min-h-9 items-center rounded-[2px] border px-3 text-14 transition-colors",
+        "inline-flex min-h-11 items-center rounded-[2px] border px-3 text-14 transition-colors sm:min-h-9",
         active
           ? "border-indigo-600 bg-indigo-600 text-ivory"
           : "border-ink/20 text-ink/75 hover:border-ink/45 hover:text-ink",

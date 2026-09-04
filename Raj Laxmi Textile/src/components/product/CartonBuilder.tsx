@@ -152,10 +152,10 @@ export function CartonBuilder({
   return (
     <>
     <div className="grid gap-10 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:gap-14">
-      <div>
+      <div className="min-w-0">
         {/* Add a design */}
         <div className="flex flex-wrap items-end gap-4 border border-ink/15 bg-sand p-5">
-          <div className="min-w-56 flex-1">
+          <div className="min-w-0 flex-1 basis-full sm:basis-auto">
             <label htmlFor="carton-design" className="block text-14 text-ink/70">
               Design
             </label>
@@ -198,11 +198,17 @@ export function CartonBuilder({
                 <th scope="col" className="border-b border-ink/15 py-2 pr-4 text-left font-normal">
                   Pieces
                 </th>
-                <th scope="col" className="border-b border-ink/15 py-2 pr-4 text-left font-normal">
+                <th
+                  scope="col"
+                  className="hidden border-b border-ink/15 py-2 pr-4 text-left font-normal sm:table-cell"
+                >
                   Tier
                 </th>
                 {showPrices ? (
-                  <th scope="col" className="border-b border-ink/15 py-2 pr-4 text-right font-normal">
+                  <th
+                    scope="col"
+                    className="hidden border-b border-ink/15 py-2 pr-4 text-right font-normal sm:table-cell"
+                  >
                     Line total
                   </th>
                 ) : null}
@@ -218,6 +224,16 @@ export function CartonBuilder({
                     <span className="block text-ink">{row.design.name}</span>
                     <span className="block text-14 text-ink/70">
                       {row.design.code}, {row.design.sizeLabel}
+                    </span>
+                    {/* On a phone the tier and line total live here instead of
+                        in their own columns, so the table fits without scrolling. */}
+                    <span className="mt-1 block text-14 text-ink/70 sm:hidden">
+                      {row.band
+                        ? `${formatQuantity(row.band.minQty)}+ tier`
+                        : `below ${formatQuantity(row.design.moq)} minimum`}
+                      {showPrices && row.lineTotal !== null
+                        ? ` — ${formatRupees(row.lineTotal)}`
+                        : ""}
                     </span>
                   </td>
                   <td className="border-b border-ink/10 py-3 pr-4">
@@ -238,16 +254,16 @@ export function CartonBuilder({
                           : lines.filter((l) => l.slug !== row.slug);
                         update(next);
                       }}
-                      className="w-24 rounded-[2px] border border-ink/25 bg-ivory px-2 py-1.5 text-16 tabular-nums text-ink focus-visible:border-marigold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marigold"
+                      className="w-16 rounded-[2px] border border-ink/25 sm:w-24 bg-ivory px-2 py-1.5 text-16 tabular-nums text-ink focus-visible:border-marigold focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marigold"
                     />
                   </td>
-                  <td className="border-b border-ink/10 py-3 pr-4 text-14 text-ink/70">
+                  <td className="hidden border-b border-ink/10 py-3 pr-4 text-14 text-ink/70 sm:table-cell">
                     {row.band
                       ? `${formatQuantity(row.band.minQty)}+ tier`
                       : `below ${formatQuantity(row.design.moq)} minimum`}
                   </td>
                   {showPrices ? (
-                    <td className="border-b border-ink/10 py-3 pr-4 text-right tabular-nums text-ink">
+                    <td className="hidden border-b border-ink/10 py-3 pr-4 text-right tabular-nums text-ink sm:table-cell">
                       {row.lineTotal === null ? "—" : formatRupees(row.lineTotal)}
                     </td>
                   ) : null}
@@ -269,7 +285,7 @@ export function CartonBuilder({
       </div>
 
       {/* Summary */}
-      <aside className="border border-ink/15 bg-sand p-5">
+      <aside className="min-w-0 border border-ink/15 bg-sand p-5">
         <h2 className="text-18 font-semibold text-ink">This carton</h2>
 
         <div className="mt-4">

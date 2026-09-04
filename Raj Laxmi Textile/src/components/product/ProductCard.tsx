@@ -91,14 +91,15 @@ export function ProductCard({ product }: { product: ProductCardData }) {
                 onClick={() => setColourwayIndex(i)}
                 aria-pressed={selected}
                 title={`${option.tradeName} — ${option.name}`}
-                className={cn(
-                  "block size-7 rounded-[2px] border-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marigold",
-                  selected ? "border-marigold" : "border-ink/15 hover:border-ink/45",
-                )}
+                // The swatch stays 28px; the padding makes the tap area 44px.
+                className="-m-1 block rounded-[2px] p-2 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-marigold"
               >
                 <span
                   aria-hidden="true"
-                  className="block size-full"
+                  className={cn(
+                    "block size-7 rounded-[2px] border-2 transition-colors",
+                    selected ? "border-marigold" : "border-ink/15 hover:border-ink/45",
+                  )}
                   style={{ backgroundColor: option.field }}
                 />
                 <span className="sr-only">

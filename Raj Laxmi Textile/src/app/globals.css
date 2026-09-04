@@ -133,18 +133,12 @@
  * matters only after a banner is dismissed.
  */
 :root {
-  --header-h: 248px;
+  --header-h: 208px;
 }
 
 @media (min-width: 640px) {
   :root {
-    --header-h: 194px;
-  }
-}
-
-@media (min-width: 1024px) {
-  :root {
-    --header-h: 180px;
+    --header-h: 212px;
   }
 }
 

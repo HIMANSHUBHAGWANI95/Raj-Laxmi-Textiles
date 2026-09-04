@@ -28,14 +28,17 @@ export function PrototypeBanner() {
       <div className="mx-auto flex w-full max-w-site items-center gap-4 px-6 py-2 md:px-12">
         <p className="text-14 text-ivory/85">
           <span className="font-semibold text-ivory">Preview build.</span>{" "}
-          Imagery is placeholder artwork and rates are indicative — final rates
-          are confirmed on enquiry.
+          <span className="sm:hidden">Placeholder imagery, indicative rates.</span>
+          <span className="hidden sm:inline">
+            Imagery is placeholder artwork and rates are indicative — final rates
+            are confirmed on enquiry.
+          </span>
         </p>
         <button
           type="button"
           onClick={() => setDismissed(true)}
           aria-label="Dismiss preview notice"
-          className="ml-auto inline-flex size-7 shrink-0 items-center justify-center rounded-[2px] text-ivory/70 transition-colors hover:bg-ivory/10 hover:text-ivory focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marigold"
+          className="ml-auto inline-flex size-11 shrink-0 items-center justify-center rounded-[2px] text-ivory/70 transition-colors hover:bg-ivory/10 hover:text-ivory focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-marigold"
         >
           <XIcon className="size-4" />
         </button>
