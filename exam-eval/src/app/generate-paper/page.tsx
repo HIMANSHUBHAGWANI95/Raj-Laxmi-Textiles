@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import {
   GraduationCap,
   Calendar,
@@ -11,54 +10,23 @@ import {
   Printer,
   Copy,
   CheckCircle,
+  Check,
   Eye,
   Settings,
-  Database,
   ArrowLeft,
   Search,
+  PenLine,
   Upload,
   X,
   Sparkles,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
-import { PaperConfig, GeneratedPaper } from "@/lib/question-agents";
-
-const subjects = [
-  // General / School
-  "Mathematics",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "English",
-  "History",
-  "Geography",
-  "Economics",
-  "Accountancy",
-  "Computer Science",
-
-  // CS Core
-  "Data Structures & Algorithms (DSA)",
-  "Database Management Systems (DBMS)",
-  "Operating Systems (OS)",
-  "Computer Networks (CN)",
-  "Object-Oriented Programming (OOP)",
-  "Software Engineering",
-  "Theory of Computation (TOC)",
-  "Compiler Design",
-  "Computer Architecture & Organization",
-  "Discrete Mathematics",
-
-  // CS Applied
-  "Artificial Intelligence (AI)",
-  "Machine Learning (ML)",
-  "Deep Learning & Neural Networks",
-  "Data Science",
-  "Web Technologies & Development",
-  "Cloud Computing",
-  "Cybersecurity & Cryptography",
-  "Mobile App Development",
-  "Big Data Analytics",
-  "Human-Computer Interaction (HCI)",
-];
+import { GeneratedPaper } from "@/lib/question-agents";
+import { SubjectSelector } from "@/components/SubjectSelector";
+import { SharedQuotaBadge } from "@/components/SharedQuotaBadge";
+import { computeTimeAllowed } from "@/lib/timeAllowed";
+import { buildUserFacingValidationMessage } from "@/lib/paperUserMessages";
 
 const grades = [
   "8th Grade",
@@ -72,8 +40,22 @@ const grades = [
 ];
 
 // ─── Types ───────────────────────────────────────────────────────────────────
-type GenerationStatus = "idle" | "generating" | "complete" | "error";
+type GenerationStatus = "idle" | "generating" | "complete" | "error" | "quota_exceeded" | "maintenance" | "stuck" | "connection_lost";
 type AgentStatus = "idle" | "active" | "done" | "error";
+
+interface ConflictInfo {
+  message: string;
+  impliedTotal: number | null;
+  fieldTotal: number;
+  typeConflict: boolean;
+  impliedQuestionTypes: string[] | null;
+  fieldQuestionTypes: string[];
+}
+
+interface RepairAttemptLog {
+  attempt: number;
+  violations: string[];
+}
 
 interface AgentLogEntry {
   type: "log" | "tool_call" | "tool_result" | "done";
@@ -82,17 +64,48 @@ interface AgentLogEntry {
   ts: number;
 }
 
+const SUBSCRIPT_DIGITS: Record<string, string> = { "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉" };
+const SUPERSCRIPT_DIGITS: Record<string, string> = { "0": "⁰", "1": "¹", "2": "²", "3": "³", "4": "⁴", "5": "⁵", "6": "⁶", "7": "⁷", "8": "⁸", "9": "⁹" };
+
+// The AI occasionally emits raw LaTeX-ish math markup ($H_2O$, \times, \rightarrow,
+// literal "\n") instead of plain text — there's no LaTeX renderer in this app, so
+// left as-is it shows dollar signs and backslash commands verbatim on the printed
+// paper. This converts the common subset to plain/unicode text instead.
+function cleanMathText(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/\\n/g, " ")
+    .replace(/\\rightarrow/g, "→")
+    .replace(/\\leftarrow/g, "←")
+    .replace(/\\times/g, "×")
+    .replace(/\\div/g, "÷")
+    .replace(/\\cdot/g, "·")
+    .replace(/\\pm/g, "±")
+    .replace(/\\Delta/g, "Δ")
+    .replace(/\\sqrt\{([^}]*)\}/g, "√($1)")
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "$1/$2")
+    .replace(/[_^]\{(-?[0-9]+)\}/g, (_m, digits: string, offset: number, full: string) => {
+      const isSuper = full[offset - 1] === "^";
+      const map = isSuper ? SUPERSCRIPT_DIGITS : SUBSCRIPT_DIGITS;
+      return digits.replace(/-|[0-9]/g, (d) => (d === "-" ? "" : map[d] ?? d));
+    })
+    .replace(/[_^]([0-9])/g, (m, digit: string) => (m[0] === "^" ? SUPERSCRIPT_DIGITS[digit] : SUBSCRIPT_DIGITS[digit]) ?? m)
+    .replace(/\$/g, "")
+    .replace(/^[A-D]\)\s*/, "")
+    .trim();
+}
+
 // ─── AgentCard component ─────────────────────────────────────────────────────
-const ACCENT: Record<string, { badge: string; glow: string; ring: string; dot: string; border: string; bg: string }> = {
-  blue:   { badge: "bg-blue-100 text-blue-700",    glow: "shadow-blue-500/20",   ring: "ring-blue-500", dot: "bg-blue-500",   border: "border-blue-100", bg: "bg-blue-50" },
-  indigo: { badge: "bg-indigo-100 text-indigo-700", glow: "shadow-indigo-500/20", ring: "ring-indigo-500", dot: "bg-indigo-500", border: "border-indigo-100", bg: "bg-indigo-50" },
-  purple: { badge: "bg-purple-100 text-purple-700", glow: "shadow-purple-500/20", ring: "ring-purple-500", dot: "bg-purple-500", border: "border-purple-100", bg: "bg-purple-50" },
+const ACCENT: Record<string, { badge: string; glow: string; ring: string; dot: string; border: string; bg: string; text: string }> = {
+  blue:   { badge: "bg-blue-100 text-blue-700",    glow: "shadow-blue-500/20",   ring: "ring-blue-500", dot: "bg-blue-500",   border: "border-blue-100", bg: "bg-blue-50", text: "text-blue-700" },
+  indigo: { badge: "bg-indigo-100 text-indigo-700", glow: "shadow-indigo-500/20", ring: "ring-indigo-500", dot: "bg-indigo-500", border: "border-indigo-100", bg: "bg-indigo-50", text: "text-indigo-700" },
+  purple: { badge: "bg-purple-100 text-purple-700", glow: "shadow-purple-500/20", ring: "ring-purple-500", dot: "bg-purple-500", border: "border-purple-100", bg: "bg-purple-50", text: "text-purple-700" },
 };
 
 function AgentCard({
-  icon, name, role, status, logs, accentColor,
+  icon: Icon, name, role, status, logs, accentColor,
 }: {
-  icon: string;
+  icon: React.ComponentType<{ className?: string }>;
   name: string;
   role: string;
   status: AgentStatus;
@@ -109,13 +122,13 @@ function AgentCard({
   }, [logs]);
 
   return (
-    <div className={`rounded-2xl border ${c.border} bg-white shadow-md ${status === "active" ? `shadow-lg ${c.glow}` : ""} transition-all duration-500 overflow-hidden flex flex-col`}>
+    <div className={`rounded-2xl border ${c.border} bg-surface shadow-md ${status === "active" ? `shadow-lg ${c.glow}` : ""} transition-all duration-500 overflow-hidden flex flex-col`}>
       {/* Card header */}
       <div className={`px-4 py-3 flex items-start gap-3 ${c.bg} border-b ${c.border}`}>
-        <span className="text-xl mt-0.5">{icon}</span>
+        <Icon className={`w-5 h-5 mt-0.5 ${c.text}`} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-sm font-bold text-gray-900 truncate" style={{ fontFamily: "var(--font-poppins)" }}>{name}</p>
+            <p className="text-sm font-bold text-gray-900 truncate" style={{ fontFamily: "var(--font-display)" }}>{name}</p>
             {status === "active" && (
               <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ${c.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${c.dot} animate-pulse`} />
@@ -129,10 +142,10 @@ function AgentCard({
               </span>
             )}
             {status === "idle" && (
-              <span className="text-xs font-medium text-gray-400 px-2 py-0.5 rounded-full bg-gray-100">Waiting</span>
+              <span className="text-xs font-medium text-gray-400 px-2 py-0.5 rounded-full bg-surface-2">Waiting</span>
             )}
           </div>
-          <p className="text-xs text-gray-500 mt-0.5 truncate">{role}</p>
+          <p className="text-xs text-graphite mt-0.5 truncate">{role}</p>
         </div>
       </div>
       {/* Log feed */}
@@ -141,26 +154,26 @@ function AgentCard({
         className="flex-1 min-h-[160px] max-h-[200px] overflow-y-auto p-3 space-y-1.5 bg-gray-950 scrollbar-thin"
       >
         {logs.length === 0 && status === "idle" && (
-          <p className="text-gray-600 text-xs italic text-center mt-8">Waiting for activation...</p>
+          <p className="text-graphite text-xs italic text-center mt-8">Waiting for activation...</p>
         )}
         {logs.map((entry, i) => (
           <div key={i} className="flex items-start gap-2">
-            <span className="text-gray-600 text-xs font-mono shrink-0 mt-px">›</span>
+            <span className="text-graphite text-xs font-mono shrink-0 mt-px">›</span>
             {entry.type === "tool_call" && (
-              <span className="text-xs font-mono">
-                <span className="text-yellow-400">🔍 </span>
+              <span className="text-xs font-mono inline-flex items-center gap-1">
+                <Search className="w-3 h-3 text-yellow-400 inline-block" />
                 <span className="text-yellow-300">{entry.message}</span>
               </span>
             )}
             {entry.type === "tool_result" && (
-              <span className="text-xs font-mono">
-                <span className="text-green-400">✓ </span>
+              <span className="text-xs font-mono inline-flex items-center gap-1">
+                <Check className="w-3 h-3 text-green-400 inline-block" />
                 <span className="text-green-300">{entry.message}</span>
               </span>
             )}
             {entry.type === "done" && (
-              <span className="text-xs font-mono">
-                <span className="text-blue-400">✅ </span>
+              <span className="text-xs font-mono inline-flex items-center gap-1">
+                <CheckCircle className="w-3 h-3 text-blue-400 inline-block" />
                 <span className="text-blue-200 font-semibold">{entry.message}</span>
               </span>
             )}
@@ -171,7 +184,7 @@ function AgentCard({
         ))}
         {status === "active" && (
           <div className="flex items-center gap-1.5 mt-1">
-            <span className="text-gray-600 text-xs font-mono">›</span>
+            <span className="text-graphite text-xs font-mono">›</span>
             <span className="flex gap-1">
               <span className="w-1 h-1 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: "0ms" }} />
               <span className="w-1 h-1 rounded-full bg-gray-500 animate-bounce" style={{ animationDelay: "150ms" }} />
@@ -187,7 +200,6 @@ function AgentCard({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function GeneratePaperPage() {
-  const router = useRouter();
   const [subject, setSubject] = useState("");
   const [grade, setGrade] = useState("");
   const [topic, setTopic] = useState("");
@@ -197,7 +209,43 @@ export default function GeneratePaperPage() {
   
   const [status, setStatus] = useState<GenerationStatus>("idle");
   const [error, setError] = useState("");
+  const [quotaResetsAt, setQuotaResetsAt] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  // Editing a question or metadata field autosaves in the background —
+  // failure used to be console.error only, so a user who edited a
+  // question, saw it update on screen, and closed the tab had no idea the
+  // edit never actually reached the database. Surfaced as a dismissible
+  // banner instead.
+  const [autosaveError, setAutosaveError] = useState(false);
+
+  // Conflict resolution (structured field vs. parsed custom-instruction constraint)
+  const [conflictInfo, setConflictInfo] = useState<ConflictInfo | null>(null);
+  // Failure UX detail: why it failed, whether the quota credit was refunded,
+  // and whether retrying is worth it — so a failure is never just "Something
+  // went wrong" with no next step.
+  const [quotaRefunded, setQuotaRefunded] = useState(false);
+  const [retryWorthwhile, setRetryWorthwhile] = useState(true);
+  const [repairAttemptLogs, setRepairAttemptLogs] = useState<RepairAttemptLog[] | null>(null);
+  // Job-based generation state — generation now runs as a durable, pollable
+  // job (see /api/papers) instead of holding one long-lived streamed
+  // connection open, which is what got killed by Vercel's function timeout
+  // in production ("Task timed out after 120 seconds"). jobId lets Cancel
+  // and the poll loop address the same row; pollTimer/noProgressSince back
+  // the client-side stuck-job timeout, which previously did not exist at
+  // all (a dead server-side stream just spun the UI forever).
+  const [jobId, setJobId] = useState<string | null>(null);
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastProgressRef = useRef<number>(Date.now());
+  const lastStepRef = useRef<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  // Backoff + ceiling state for the poll loop (section 3/4 of the connection
+  // fix): consecutive network/gateway failures grow the delay before the
+  // next attempt and, past a ceiling, stop and tell the user honestly rather
+  // than silently retrying forever OR immediately declaring the job dead —
+  // a 504 on the poll means "couldn't reach the server that moment," not
+  // "the job failed." The job itself may still be running fine.
+  const consecutivePollFailuresRef = useRef(0);
+  const pollAttemptCountRef = useRef(0);
 
   // Custom Paper Style & Study Material Upload
   const [customPrompt, setCustomPrompt] = useState("");
@@ -232,10 +280,17 @@ export default function GeneratePaperPage() {
   const [aiFeedback, setAiFeedback] = useState("");
   
   // Printable Exam Metadata
-  const [institutionName, setInstitutionName] = useState("University Examination Board");
+  const [institutionName, setInstitutionName] = useState("");
   const [courseCode, setCourseCode] = useState("");
-  const [timeAllowed, setTimeAllowed] = useState("2 Hours");
+  const [timeAllowed, setTimeAllowed] = useState(() => computeTimeAllowed(30));
+  const [timeAllowedTouched, setTimeAllowedTouched] = useState(false);
   const [instructions, setInstructions] = useState("1. All questions are compulsory.\n2. Write your Candidate Name and Roll Number clearly at the top right.");
+
+  // Time allowed must track total marks, not sit at a fixed default — but
+  // once the user has typed their own value, stop overwriting it.
+  useEffect(() => {
+    if (!timeAllowedTouched) setTimeAllowed(computeTimeAllowed(totalMarks));
+  }, [totalMarks, timeAllowedTouched]);
 
   const handleTypeChange = (type: string) => {
     if (questionTypes.includes(type)) {
@@ -289,14 +344,180 @@ export default function GeneratePaperPage() {
     setUploadError("");
   };
 
-  const addLog = (agent: "planner" | "generator" | "reviewer", entry: Omit<AgentLogEntry, "ts">) => {
+  const addLog = (agent: "planner" | "generator" | "reviewer" | "repair", entry: Omit<AgentLogEntry, "ts">) => {
     const full: AgentLogEntry = { ...entry, ts: Date.now() };
     if (agent === "planner") setPlannerLogs(p => [...p, full]);
     else if (agent === "generator") setGeneratorLogs(p => [...p, full]);
+    // "repair" events (validation attempts / re-prompts) surface on the
+    // Reviewer card — validating and repairing the paper against the
+    // request is part of the same quality-audit stage from the user's
+    // point of view.
     else setReviewerLogs(p => [...p, full]);
   };
 
-  const handleGenerate = async (e: React.FormEvent) => {
+  // Generation runs as a durable job (POST creates it, GET polls and drives
+  // it forward) rather than one held-open streamed connection — that
+  // connection is exactly what got killed in production ("Task timed out
+  // after 120 seconds") with three sequential Gemini calls plus a repair
+  // loop inside it. Polling also gets us a real client-side timeout for
+  // free: a streamed connection that silently dies gives the client nothing
+  // to react to, which is why the UI used to spin forever.
+  const NO_PROGRESS_TIMEOUT_MS = 90_000;
+  const POLL_INTERVAL_MS = 2000;
+  const POLL_INTERVAL_MAX_MS = 8000;
+  const MAX_CONSECUTIVE_POLL_FAILURES = 5; // ~1+2+4+8+8s of backoff before giving up
+  const MAX_POLL_ATTEMPTS = 300; // hard ceiling — at ~2-8s/poll this is comfortably longer than NO_PROGRESS_TIMEOUT_MS would ever allow anyway, but never poll literally forever
+
+  const agentRunState = (s: string | undefined): AgentStatus =>
+    s === "running" ? "active" : s === "done" ? "done" : s === "failed" ? "error" : "idle";
+
+  const stopPolling = () => {
+    if (pollTimerRef.current) {
+      clearTimeout(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+  };
+
+  // Synthesizes the same per-agent log lines the old SSE stream produced,
+  // from the job's persisted step transitions — the agent cards' shape and
+  // meaning are unchanged, only their source of truth is.
+  const STEP_LOG: Record<string, { agent: "planner" | "generator" | "reviewer" | "repair"; message: string }> = {
+    planner: { agent: "planner", message: "Planner Agent activated. Structuring the paper..." },
+    generator: { agent: "generator", message: "Generator Agent activated. Drafting questions, answers, and mark schemes..." },
+    reviewer: { agent: "reviewer", message: "Quality Reviewer Agent activated. Auditing the draft..." },
+    validate: { agent: "repair", message: "Validating the paper against your exact request..." },
+    repair: { agent: "repair", message: "Validation found issues — re-prompting to fix them specifically..." },
+    done: { agent: "repair", message: "Done." },
+  };
+
+  // Nudges the job forward — a real Gemini call may live behind this
+  // request, so it is NEVER awaited by anything the UI depends on to
+  // update. Fire-and-forget: if it's slow, times out, or the network drops
+  // it, the next read poll just sees whatever state existed before it,
+  // which is correct (not stale-in-a-harmful-way) rather than blocking.
+  const triggerAdvance = (id: string) => {
+    fetch(`/api/papers/${id}/advance`, { method: "POST" }).catch(() => {
+      // Deliberately silent — this is a nudge, not a read the UI depends on.
+      // If it fails, the row simply doesn't move this cycle; the next poll
+      // (or another tab, or the daily cron) tries again.
+    });
+  };
+
+  const pollJob = async (id: string) => {
+    // Don't poll a hidden tab — a fixed-interval poll from a background tab
+    // the user isn't looking at is pure waste against a free-tier database
+    // and a shared Gemini quota. Resumes automatically on visibilitychange
+    // (see the effect below) rather than losing the loop entirely.
+    if (typeof document !== "undefined" && document.hidden) {
+      pollTimerRef.current = setTimeout(() => pollJob(id), POLL_INTERVAL_MS);
+      return;
+    }
+
+    pollAttemptCountRef.current += 1;
+    if (pollAttemptCountRef.current > MAX_POLL_ATTEMPTS) {
+      stopPolling();
+      setError("This generation has been running for an unusually long time. It may still finish in the background — check back later, or start a new one.");
+      setStatus("stuck");
+      return;
+    }
+
+    triggerAdvance(id);
+
+    try {
+      const res = await fetch(`/api/papers/${id}`);
+      if (!res.ok) {
+        if (res.status === 404) {
+          setError("This generation job could not be found — it may have expired.");
+          setStatus("error");
+          return;
+        }
+        // A 504/502/etc. here means "couldn't reach the server that
+        // moment" — it does NOT mean the job failed. The job keeps running
+        // server-side regardless of whether this particular poll landed.
+        // Treated as a transient network condition: back off and retry:
+        // only surface a distinct "connection lost" state (never
+        // "Generation Failed") after several consecutive misses.
+        throw new Error(`poll_http_${res.status}`);
+      }
+      consecutivePollFailuresRef.current = 0;
+      const view = await res.json();
+
+      // Step transitions drive both the log stream and the stuck-job timer.
+      if (view.step !== lastStepRef.current) {
+        lastStepRef.current = view.step;
+        lastProgressRef.current = Date.now();
+        const entry = STEP_LOG[view.step as string];
+        if (entry) addLog(entry.agent, { type: "log", message: entry.message });
+      }
+
+      setPlannerStatus(agentRunState(view.agentStates?.planner?.status));
+      setGeneratorStatus(agentRunState(view.agentStates?.generator?.status));
+      setReviewerStatus(agentRunState(view.agentStates?.reviewer?.status));
+
+      if (view.status === "succeeded") {
+        stopPolling();
+        setPlannerStatus("done"); setGeneratorStatus("done"); setReviewerStatus("done");
+        addLog("repair", { type: "done", message: "Review complete. Paper validated against your request." });
+        setPaper(view.paper);
+        setPaperDbId(view.savedPaperId);
+        setRepairAttemptLogs(view.repairAttempts || null);
+        setStatus("complete");
+        return;
+      }
+
+      if (view.status === "failed") {
+        stopPolling();
+        if (view.quotaRefunded) setQuotaRefunded(true);
+        if (view.retryWorthwhile === false) setRetryWorthwhile(false);
+        if (view.repairAttempts) setRepairAttemptLogs(view.repairAttempts);
+        setError(view.error || "Generation failed.");
+        setStatus("error");
+        return;
+      }
+
+      if (view.status === "cancelled") {
+        stopPolling();
+        setStatus("idle");
+        return;
+      }
+
+      // Still queued/running — client-side timeout: if nothing has actually
+      // moved forward (no step change, no status change) in a while, this
+      // is exactly the "stuck generation" case that used to be a dead end.
+      // Tell the user instead of spinning forever.
+      if (Date.now() - lastProgressRef.current > NO_PROGRESS_TIMEOUT_MS) {
+        stopPolling();
+        setError(
+          "This is taking much longer than expected and doesn't seem to be making progress. It may still finish in the background — you can wait and refresh, or cancel and try again."
+        );
+        setStatus("stuck");
+        return;
+      }
+
+      pollTimerRef.current = setTimeout(() => pollJob(id), POLL_INTERVAL_MS);
+    } catch (err) {
+      // Network failure or a non-JSON/gateway error response — distinct
+      // from a job that actually failed. Back off exponentially and keep
+      // trying; only give up (with a state that says "connection," never
+      // "Generation Failed") after several consecutive misses in a row.
+      consecutivePollFailuresRef.current += 1;
+      console.error("Poll attempt failed:", err);
+
+      if (consecutivePollFailuresRef.current >= MAX_CONSECUTIVE_POLL_FAILURES) {
+        stopPolling();
+        setError(
+          "Lost connection while checking on your generation. The job itself may still be running fine server-side — reconnecting will show its real state, not restart it."
+        );
+        setStatus("connection_lost");
+        return;
+      }
+
+      const backoff = Math.min(POLL_INTERVAL_MAX_MS, POLL_INTERVAL_MS * Math.pow(2, consecutivePollFailuresRef.current));
+      pollTimerRef.current = setTimeout(() => pollJob(id), backoff);
+    }
+  };
+
+  const handleGenerate = async (e: React.FormEvent, conflictResolution?: "useImplied" | "useField") => {
     e.preventDefault();
     if (!subject || !grade || !topic || questionTypes.length === 0) {
       setError("Please fill in all required fields and select at least one question type.");
@@ -304,81 +525,131 @@ export default function GeneratePaperPage() {
     }
 
     setError("");
+    setConflictInfo(null);
+    setQuotaRefunded(false);
+    setRetryWorthwhile(true);
+    setRepairAttemptLogs(null);
     setStatus("generating");
     setPaper(null);
+    setJobId(null);
+    lastStepRef.current = null;
+    lastProgressRef.current = Date.now();
+    consecutivePollFailuresRef.current = 0;
+    pollAttemptCountRef.current = 0;
     setPlannerStatus("idle"); setGeneratorStatus("idle"); setReviewerStatus("idle");
     setPlannerLogs([]); setGeneratorLogs([]); setReviewerLogs([]);
 
     try {
-      const res = await fetch("/api/questions/generate-stream", {
+      const res = await fetch("/api/papers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject, grade, topic, difficulty, totalMarks, questionTypes,
-          institutionName, courseCode, timeAllowed, instructions,
           customPrompt, studyMaterialText,
+          ...(conflictResolution ? { conflictResolution } : {}),
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to connect to generation service.");
-      if (!res.body) throw new Error("No response stream.");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const payload = JSON.parse(line.slice(6));
-            const { event, agent, message, query } = payload;
-
-            if (event === "agent_start") {
-              if (agent === "planner") setPlannerStatus("active");
-              else if (agent === "generator") setGeneratorStatus("active");
-              else if (agent === "reviewer") setReviewerStatus("active");
-              if (message) addLog(agent, { type: "log", message });
-            } else if (event === "agent_log") {
-              if (message) addLog(agent, { type: "log", message });
-            } else if (event === "agent_tool_call") {
-              if (query) addLog(agent, { type: "tool_call", message: `Searching: "${query}"`, query });
-            } else if (event === "agent_tool_result") {
-              if (message) addLog(agent, { type: "tool_result", message });
-            } else if (event === "agent_done") {
-              if (agent === "planner") setPlannerStatus("done");
-              else if (agent === "generator") setGeneratorStatus("done");
-              else if (agent === "reviewer") setReviewerStatus("done");
-              if (message) addLog(agent, { type: "done", message });
-            } else if (event === "complete") {
-              const dbPaper = payload.paper;
-              setPaperDbId(dbPaper.id);
-              const results = JSON.parse(dbPaper.content);
-              setPaper(results.paper);
-              setPlannerPlan(results.plannerPlan);
-              setGeneratorDraft(results.generatorDraft);
-              setStatus("complete");
-            } else if (event === "error") {
-              throw new Error(payload.message || "Generation failed.");
-            }
-          } catch (parseErr) {
-            if (parseErr instanceof SyntaxError) continue;
-            throw parseErr;
-          }
-        }
+      // A platform-level failure (e.g. a function timeout) returns a body
+      // that isn't our JSON at all — that parse failure is itself
+      // meaningful (it means something killed the request before our code
+      // could even respond), not something to silently paper over.
+      let body: Record<string, unknown> = {};
+      let bodyParseFailed = false;
+      try {
+        body = await res.json();
+      } catch {
+        bodyParseFailed = true;
       }
+
+      if (!res.ok) {
+        if (res.status === 409 && body.conflict) {
+          // Your instructions disagree with the structured fields — never
+          // silently pick one. Surface the conflict and let the user choose.
+          setConflictInfo({
+            message: body.message as string,
+            impliedTotal: body.impliedTotal as number | null,
+            fieldTotal: body.fieldTotal as number,
+            typeConflict: body.typeConflict as boolean,
+            impliedQuestionTypes: body.impliedQuestionTypes as string[] | null,
+            fieldQuestionTypes: body.fieldQuestionTypes as string[],
+          });
+          setStatus("idle");
+          return;
+        }
+        if (body.quotaExceeded) {
+          setQuotaResetsAt((body.resetsAt as string) || null);
+          setStatus("quota_exceeded");
+          setError((body.error as string) || "Daily limit reached.");
+          return;
+        }
+        if (body.maintenance) {
+          setStatus("maintenance");
+          setError((body.error as string) || "Question generation is temporarily unavailable.");
+          return;
+        }
+        if (bodyParseFailed) {
+          throw new Error(
+            `[HTTP_${res.status}] The server didn't respond in time to start generation (status ${res.status}). This usually means the request was still starting up when it got cut off — try again.`
+          );
+        }
+        const code = body.code ? ` [${body.code}]` : "";
+        const devDetail = body.devMessage ? ` — ${body.devMessage}` : "";
+        throw new Error(`${(body.error as string) || "Failed to start generation."}${code}${devDetail}`);
+      }
+
+      setJobId(body.jobId as string);
+      pollJob(body.jobId as string);
     } catch (err) {
       console.error(err);
-      const msg = err instanceof Error ? err.message : "An unexpected error occurred during generation.";
+      const msg = err instanceof Error ? err.message : "Could not start generation. Check your connection and try again.";
       setError(msg);
       setStatus("error");
     }
   };
+
+  const handleCancelJob = async () => {
+    if (!jobId) return;
+    setCancelling(true);
+    try {
+      await fetch(`/api/papers/${jobId}`, { method: "DELETE" });
+    } catch {
+      // Best-effort — the job row is the source of truth either way; if this
+      // request fails the job stays running server-side but the user is
+      // already back at the form and can simply start a new one.
+    } finally {
+      stopPolling();
+      setCancelling(false);
+      setStatus("idle");
+    }
+  };
+
+  // If the user navigates away mid-poll (or this component unmounts for any
+  // other reason), stop the timer — but the job itself keeps running
+  // server-side. Coming back to this page and generating again starts a
+  // fresh job; re-attaching to an in-flight job on navigation-return isn't
+  // wired into this form (there's no "resume" UI), but the underlying job
+  // row itself is unaffected — see proof test 6 in the report, which
+  // verifies this at the API level.
+  useEffect(() => {
+    return () => stopPolling();
+  }, []);
+
+  // Resume promptly the moment the tab becomes visible again, rather than
+  // waiting up to POLL_INTERVAL_MS for the next scheduled tick — pollJob()
+  // itself already refuses to do work while document.hidden, this just
+  // makes the resume feel immediate instead of laggy.
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (!document.hidden && jobId && (status === "generating" || status === "stuck")) {
+        stopPolling(); // avoid double-scheduling against the timer already pending
+        pollJob(jobId);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobId, status]);
 
   const savePaperEdits = async (updatedPaper: GeneratedPaper) => {
     if (!paperDbId) return;
@@ -395,7 +666,7 @@ export default function GeneratePaperPage() {
         }
       };
 
-      await fetch(`/api/questions/${paperDbId}`, {
+      const res = await fetch(`/api/questions/${paperDbId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -403,8 +674,11 @@ export default function GeneratePaperPage() {
           content: JSON.stringify(dbPayload)
         })
       });
+      if (!res.ok) throw new Error(`Autosave failed with status ${res.status}`);
+      setAutosaveError(false);
     } catch (err) {
       console.error("Failed to save paper edits to DB:", err);
+      setAutosaveError(true);
     }
   };
 
@@ -414,11 +688,30 @@ export default function GeneratePaperPage() {
     }
   };
 
+  // AI Refine used to hold its own long-lived SSE connection open against
+  // /api/questions/generate-stream — the exact architecture that produced
+  // the confirmed production timeout ("Task timed out after 120 seconds")
+  // on the main generate flow, just never migrated when that flow was fixed.
+  // It now creates a job and drives it through the same durable
+  // POST /api/papers + pollJob() machinery as handleGenerate, so a refine
+  // request gets the same stuck-job detection, backoff, and reconnect
+  // handling for free instead of a second, unmaintained copy of it. With
+  // this call site migrated, /api/questions/generate-stream had zero
+  // remaining callers and has been deleted, along with the equally-dead
+  // non-streaming /api/questions/generate.
   const handleAIRefine = async () => {
     if (!aiFeedback.trim() || !paper) return;
 
     setError("");
+    setQuotaRefunded(false);
+    setRetryWorthwhile(true);
+    setRepairAttemptLogs(null);
     setStatus("generating");
+    setJobId(null);
+    lastStepRef.current = null;
+    lastProgressRef.current = Date.now();
+    consecutivePollFailuresRef.current = 0;
+    pollAttemptCountRef.current = 0;
     setPlannerStatus("idle"); setGeneratorStatus("idle"); setReviewerStatus("idle");
     setPlannerLogs([]); setGeneratorLogs([]); setReviewerLogs([]);
 
@@ -429,86 +722,64 @@ You are tasked with refining the existing question paper based on the user's rev
 ${aiFeedback}
 
 [Existing Question Paper JSON]:
-${JSON.stringify(paper, null, 2)}
+${JSON.stringify(paper)}
 `;
 
     setAiFeedback("");
 
     try {
-      const res = await fetch("/api/questions/generate-stream", {
+      const res = await fetch("/api/papers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          subject,
-          grade,
-          topic,
-          difficulty,
-          totalMarks,
-          questionTypes,
-          institutionName,
-          courseCode,
-          timeAllowed,
-          instructions,
+          subject, grade, topic, difficulty, totalMarks, questionTypes,
           customPrompt: refinementPrompt,
           studyMaterialText,
+          // The topic and structured fields were already settled by the
+          // generation being refined — re-running topic spellcheck or the
+          // implied-vs-field conflict gate against free-text revision
+          // feedback would surface a confirmation modal wired to
+          // handleGenerate, not this flow, and lose the refinement prompt.
+          topicResolution: "useOriginal",
+          conflictResolution: "useField",
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to connect to generation service.");
-      if (!res.body) throw new Error("No response stream.");
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n\n");
-        buffer = lines.pop() || "";
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const payload = JSON.parse(line.slice(6));
-            const { event, agent, message, query } = payload;
-
-            if (event === "agent_start") {
-              if (agent === "planner") setPlannerStatus("active");
-              else if (agent === "generator") setGeneratorStatus("active");
-              else if (agent === "reviewer") setReviewerStatus("active");
-              if (message) addLog(agent, { type: "log", message });
-            } else if (event === "agent_log") {
-              if (message) addLog(agent, { type: "log", message });
-            } else if (event === "agent_tool_call") {
-              if (query) addLog(agent, { type: "tool_call", message: `Searching: "${query}"`, query });
-            } else if (event === "agent_tool_result") {
-              if (message) addLog(agent, { type: "tool_result", message });
-            } else if (event === "agent_done") {
-              if (agent === "planner") setPlannerStatus("done");
-              else if (agent === "generator") setGeneratorStatus("done");
-              else if (agent === "reviewer") setReviewerStatus("done");
-              if (message) addLog(agent, { type: "done", message });
-            } else if (event === "complete") {
-              const dbPaper = payload.paper;
-              setPaperDbId(dbPaper.id);
-              const results = JSON.parse(dbPaper.content);
-              setPaper(results.paper);
-              setPlannerPlan(results.plannerPlan);
-              setGeneratorDraft(results.generatorDraft);
-              setStatus("complete");
-            } else if (event === "error") {
-              throw new Error(payload.message || "Generation failed.");
-            }
-          } catch (parseErr) {
-            if (parseErr instanceof SyntaxError) continue;
-            throw parseErr;
-          }
-        }
+      let body: Record<string, unknown> = {};
+      let bodyParseFailed = false;
+      try {
+        body = await res.json();
+      } catch {
+        bodyParseFailed = true;
       }
+
+      if (!res.ok) {
+        if (body.quotaExceeded) {
+          setQuotaResetsAt((body.resetsAt as string) || null);
+          setStatus("quota_exceeded");
+          setError((body.error as string) || "Daily limit reached.");
+          return;
+        }
+        if (body.maintenance) {
+          setStatus("maintenance");
+          setError((body.error as string) || "Question generation is temporarily unavailable.");
+          return;
+        }
+        if (bodyParseFailed) {
+          throw new Error(
+            `[HTTP_${res.status}] The server didn't respond in time to start the refinement (status ${res.status}). This usually means the request was still starting up when it got cut off — try again.`
+          );
+        }
+        const code = body.code ? ` [${body.code}]` : "";
+        const devDetail = body.devMessage ? ` — ${body.devMessage}` : "";
+        throw new Error(`${(body.error as string) || "Failed to start refinement."}${code}${devDetail}`);
+      }
+
+      setJobId(body.jobId as string);
+      pollJob(body.jobId as string);
     } catch (err) {
       console.error(err);
-      const msg = err instanceof Error ? err.message : "An unexpected error occurred during refinement.";
+      const msg = err instanceof Error ? err.message : "Could not start the refinement. Check your connection and try again.";
       setError(msg);
       setStatus("error");
     }
@@ -522,14 +793,14 @@ ${JSON.stringify(paper, null, 2)}
     paper.sections.forEach((section) => {
       text += `--- ${section.title} ---\n${section.description}\n\n`;
       section.questions.forEach((q) => {
-        text += `Q${q.number}. ${q.question} (${q.marks} Marks)\n`;
+        text += `Q${q.number}. ${cleanMathText(q.question)} (${q.marks} Marks)\n`;
         if (q.options && q.options.length > 0) {
           q.options.forEach((opt, idx) => {
-            text += `   ${String.fromCharCode(65 + idx)}. ${opt}\n`;
+            text += `   ${String.fromCharCode(65 + idx)}. ${cleanMathText(opt)}\n`;
           });
         }
         if (viewMode === "answers") {
-          text += `[Answer: ${q.answer}]\n`;
+          text += `[Answer: ${cleanMathText(q.answer)}]\n`;
         }
         text += `\n`;
       });
@@ -545,7 +816,7 @@ ${JSON.stringify(paper, null, 2)}
   };
 
   return (
-    <div className="max-w-5xl mx-auto pb-16">
+    <div className="max-w-5xl mx-auto pb-16 pt-14 lg:pt-0">
       {/* Print-Only Title and Paper Layout CSS overrides */}
       <style jsx global>{`
         @media print {
@@ -601,14 +872,14 @@ ${JSON.stringify(paper, null, 2)}
       `}</style>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-8 no-print">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6 no-print">
         <div>
-          <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-3" style={{ fontFamily: "var(--font-poppins)" }}>
-            <GraduationCap className="w-8 h-8 text-blue-600" />
-            AI Question Paper Generator
+          <h1 className="text-xl sm:text-2xl font-extrabold text-gray-900 flex items-center gap-2 sm:gap-3" style={{ fontFamily: "var(--font-display)" }}>
+            <GraduationCap className="w-6 h-6 sm:w-8 sm:h-8 text-blue-600 flex-shrink-0" />
+            AI question paper generator
           </h1>
-          <p className="text-gray-500 mt-1 text-sm">
-            Leverage collaborative multi-agent reasoning to design and audit complete examination papers.
+          <p className="text-graphite mt-1 text-xs sm:text-sm">
+            A planner, generator, and reviewer agent pipeline drafts your paper, then validates and repairs it against your exact requirements.
           </p>
         </div>
         {paper && (
@@ -621,16 +892,51 @@ ${JSON.stringify(paper, null, 2)}
               setStudyMaterialFileName("");
               setUploadError("");
             }}
-            className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-900 border border-gray-200 px-4 py-2 rounded-xl bg-white hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 text-sm text-graphite hover:text-ink border border-gray-200 px-4 py-2 rounded-xl bg-surface hover:bg-gray-50 transition-colors"
           >
-            <ArrowLeft className="w-4 h-4" /> Create New
+            <ArrowLeft className="w-4 h-4" /> Create new
           </button>
         )}
       </div>
 
       {status === "idle" && (
-        <div className="bg-white rounded-2xl border border-gray-100 card-shadow-md p-8 no-print">
+        <div className="bg-surface rounded-2xl border border-rule card-shadow-md p-4 sm:p-8 no-print">
           <form onSubmit={handleGenerate} className="space-y-6">
+            {conflictInfo && (
+              <div className="flex flex-col gap-3 bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-xl text-sm">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
+                  <p>{conflictInfo.message} Which should I use?</p>
+                </div>
+                <div className="flex flex-wrap gap-2 pl-8">
+                  {conflictInfo.impliedTotal !== null && (
+                    <button
+                      type="button"
+                      onClick={(e) => handleGenerate(e, "useImplied")}
+                      className="px-4 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold transition-colors"
+                    >
+                      Use {conflictInfo.impliedTotal}
+                      {conflictInfo.typeConflict && conflictInfo.impliedQuestionTypes ? ` (${conflictInfo.impliedQuestionTypes.join(", ")})` : ""}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => handleGenerate(e, "useField")}
+                    className="px-4 py-2 rounded-lg bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 text-xs font-bold transition-colors"
+                  >
+                    Use {conflictInfo.fieldTotal}
+                    {conflictInfo.typeConflict ? ` (${conflictInfo.fieldQuestionTypes.join(", ")})` : ""}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConflictInfo(null)}
+                    className="px-4 py-2 rounded-lg text-amber-700 hover:bg-amber-100 text-xs font-bold transition-colors"
+                  >
+                    Let me edit
+                  </button>
+                </div>
+              </div>
+            )}
             {error && (
               <div className="flex items-start gap-3 bg-red-50 text-red-700 p-4 rounded-xl text-sm">
                 <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
@@ -638,32 +944,24 @@ ${JSON.stringify(paper, null, 2)}
               </div>
             )}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               {/* Subject */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Subject *</label>
-                <select
+                <label className="block text-sm font-semibold text-ink mb-2">Subject *</label>
+                <SubjectSelector
                   value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
-                  required
-                >
-                  <option value="">Select subject</option>
-                  {subjects.map((sub) => (
-                    <option key={sub} value={sub}>
-                      {sub}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setSubject}
+                  placeholder="Select or type subject..."
+                />
               </div>
 
               {/* Grade */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Grade Level *</label>
+                <label className="block text-sm font-semibold text-ink mb-2">Grade level *</label>
                 <select
                   value={grade}
                   onChange={(e) => setGrade(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-surface focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                   required
                 >
                   <option value="">Select grade level</option>
@@ -678,21 +976,21 @@ ${JSON.stringify(paper, null, 2)}
 
             {/* Topic */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Target Topic / Chapters *</label>
+              <label className="block text-sm font-semibold text-ink mb-2">Target topic / chapters *</label>
               <input
                 type="text"
                 value={topic}
                 onChange={(e) => setTopic(e.target.value)}
                 placeholder="e.g. Calculus: Limits & Continuity, WWI Causes, Organic Carbon Compounds"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-surface focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                 required
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               {/* Difficulty */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Cognitive Difficulty *</label>
+                <label className="block text-sm font-semibold text-ink mb-2">Cognitive difficulty *</label>
                 <div className="grid grid-cols-3 gap-3">
                   {(["Easy", "Medium", "Hard"] as const).map((level) => (
                     <button
@@ -701,8 +999,8 @@ ${JSON.stringify(paper, null, 2)}
                       onClick={() => setDifficulty(level)}
                       className={`py-3 rounded-xl border text-sm font-semibold transition-all ${
                         difficulty === level
-                          ? "gradient-primary text-white border-transparent shadow-sm"
-                          : "border-gray-200 text-gray-600 bg-gray-50 hover:bg-white hover:text-gray-900"
+                          ? "bg-ink text-paper border-transparent shadow-sm"
+                          : "border-gray-200 text-graphite bg-gray-50 hover:bg-surface hover:text-ink"
                       }`}
                     >
                       {level}
@@ -713,12 +1011,12 @@ ${JSON.stringify(paper, null, 2)}
 
               {/* Total Marks */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Total Marks (Target) *</label>
+                <label className="block text-sm font-semibold text-ink mb-2">Total marks (target) *</label>
                 <input
                   type="number"
                   value={totalMarks}
                   onChange={(e) => setTotalMarks(Math.max(5, parseInt(e.target.value) || 0))}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-surface focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
                   min="5"
                   max="200"
                   required
@@ -728,7 +1026,7 @@ ${JSON.stringify(paper, null, 2)}
 
             {/* Question Types */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Question Types (Select one or more) *</label>
+              <label className="block text-sm font-semibold text-ink mb-2">Question types (select one or more) *</label>
               <div className="flex flex-wrap gap-3">
                 {["MCQ", "Short Answer", "Long Answer"].map((type) => {
                   const isChecked = questionTypes.includes(type);
@@ -740,7 +1038,7 @@ ${JSON.stringify(paper, null, 2)}
                       className={`flex items-center gap-2 px-5 py-3 rounded-xl border text-sm font-semibold transition-all ${
                         isChecked
                           ? "bg-blue-50 text-blue-700 border-blue-200"
-                          : "border-gray-200 text-gray-600 hover:bg-gray-50"
+                          : "border-gray-200 text-graphite hover:bg-gray-50"
                       }`}
                     >
                       <input
@@ -757,25 +1055,25 @@ ${JSON.stringify(paper, null, 2)}
             </div>
 
             {/* Custom Prompt / Special Style Instructions */}
-            <div className="border-t border-gray-100 pt-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Custom Paper Style & Special Instructions (Optional)
+            <div className="border-t border-rule pt-6">
+              <label className="block text-sm font-semibold text-ink mb-2">
+                Custom paper style and special instructions (optional)
               </label>
               <textarea
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
                 placeholder="e.g. Focus on practical programming problems, include code snippets, make the questions highly conceptual, or format in a specific way..."
                 rows={3}
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
+                className="w-full px-4 py-3 rounded-xl border border-gray-200 bg-gray-50 hover:bg-surface focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-sm"
               />
             </div>
 
             {/* Study Material Upload */}
-            <div className="border-t border-gray-100 pt-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Syllabus / Study Material Upload (Optional)
+            <div className="border-t border-rule pt-6">
+              <label className="block text-sm font-semibold text-ink mb-2">
+                Syllabus / study material upload (optional)
               </label>
-              <p className="text-xs text-gray-500 mb-3">
+              <p className="text-xs text-graphite mb-3">
                 Upload PDFs, Markdown, TXT, or Word files to generate paper content directly from your documents.
               </p>
               
@@ -797,7 +1095,7 @@ ${JSON.stringify(paper, null, 2)}
                         <Upload className="w-5 h-5 text-blue-500" />
                       )}
                     </div>
-                    <p className="text-sm font-semibold text-gray-700">
+                    <p className="text-sm font-semibold text-ink">
                       {uploadingMaterial ? "Extracting document content..." : "Click or drag study materials here"}
                     </p>
                     <p className="text-xs text-gray-400 mt-1">Supports PDF, TXT, MD, DOCX (max 10MB)</p>
@@ -805,19 +1103,19 @@ ${JSON.stringify(paper, null, 2)}
                 </div>
               ) : (
                 <div className="flex items-center gap-4 p-4 bg-green-50/80 border border-green-200/50 rounded-xl">
-                  <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-sm">
+                  <div className="w-10 h-10 bg-surface rounded-lg flex items-center justify-center shadow-sm">
                     <FileText className="w-5 h-5 text-green-600" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm truncate">{studyMaterialFileName}</p>
-                    <p className="text-gray-500 text-xs mt-0.5">
+                    <p className="text-graphite text-xs mt-0.5">
                       Successfully loaded • {studyMaterialText.length} characters extracted
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={clearStudyMaterial}
-                    className="w-8 h-8 bg-white rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors shadow-sm"
+                    className="w-8 h-8 bg-surface rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 transition-colors shadow-sm"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -833,62 +1131,63 @@ ${JSON.stringify(paper, null, 2)}
             </div>
 
             {/* Academic Printing Layout Settings */}
-            <div className="border-t border-gray-100 pt-6">
+            <div className="border-t border-rule pt-6">
               <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <Printer className="w-4 h-4 text-blue-600" />
-                Academic Printing Layout (Optional)
+                Academic printing layout (optional)
               </h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-4">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Institution / School Name</label>
+                  <label className="block text-xs font-bold text-graphite mb-1.5 uppercase">Institution / School Name</label>
                   <input
                     type="text"
                     value={institutionName}
                     onChange={(e) => setInstitutionName(e.target.value)}
                     placeholder="e.g. Stanford University"
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-xs"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-surface focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Course Code</label>
+                  <label className="block text-xs font-bold text-graphite mb-1.5 uppercase">Course Code</label>
                   <input
                     type="text"
                     value={courseCode}
                     onChange={(e) => setCourseCode(e.target.value)}
                     placeholder="e.g. CS-101"
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-xs"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-surface focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-xs"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Time Allowed</label>
+                  <label className="block text-xs font-bold text-graphite mb-1.5 uppercase">Time Allowed</label>
                   <input
                     type="text"
                     value={timeAllowed}
-                    onChange={(e) => setTimeAllowed(e.target.value)}
+                    onChange={(e) => { setTimeAllowed(e.target.value); setTimeAllowedTouched(true); }}
                     placeholder="e.g. 3 Hours"
-                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-xs"
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-surface focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-xs"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1.5 uppercase">Exam Instructions</label>
+                <label className="block text-xs font-bold text-graphite mb-1.5 uppercase">Exam Instructions</label>
                 <textarea
                   value={instructions}
                   onChange={(e) => setInstructions(e.target.value)}
                   placeholder="Enter custom instructions..."
                   rows={2}
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-xs"
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 bg-gray-50 hover:bg-surface focus:bg-surface focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all text-xs"
                 />
               </div>
             </div>
 
             <button
               type="submit"
-              className="w-full py-4 rounded-xl text-white font-bold gradient-primary shadow-lg hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-base"
+              className="w-full py-4 rounded-xl text-paper font-bold bg-ink shadow-lg hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 text-base"
             >
               <GraduationCap className="w-5 h-5" />
-              Generate Question Paper
+              Generate question paper
             </button>
+            <SharedQuotaBadge />
           </form>
         </div>
       )}
@@ -897,17 +1196,26 @@ ${JSON.stringify(paper, null, 2)}
       {status === "generating" && (
         <div className="space-y-4 no-print">
           {/* Header */}
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 text-white shadow-lg">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-                <Loader2 className="w-5 h-5 animate-spin" />
+          <div className="bg-fixed-ink rounded-2xl p-6 text-white shadow-lg">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-display)" }}>
+                    AI Agent Pipeline Running
+                  </h2>
+                  <p className="text-white/70 text-xs">Planner, Generator, and Reviewer agents building your exam paper</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-lg font-bold" style={{ fontFamily: "var(--font-poppins)" }}>
-                  AI Agent Pipeline Running
-                </h2>
-                <p className="text-blue-100 text-xs">3 specialized agents collaborating to build your exam paper</p>
-              </div>
+              <button
+                onClick={handleCancelJob}
+                disabled={cancelling}
+                className="flex-shrink-0 text-xs font-semibold px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors disabled:opacity-50"
+              >
+                {cancelling ? "Cancelling..." : "Cancel"}
+              </button>
             </div>
             {/* Agent pipeline progress dots */}
             <div className="flex items-center gap-3 mt-4">
@@ -934,10 +1242,10 @@ ${JSON.stringify(paper, null, 2)}
           </div>
 
           {/* Agent Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
             {/* ── Planner Agent Card ── */}
             <AgentCard
-              icon="📅"
+              icon={Calendar}
               name="Planner Agent"
               role="Designs exam structure & mark distribution"
               status={plannerStatus}
@@ -946,7 +1254,7 @@ ${JSON.stringify(paper, null, 2)}
             />
             {/* ── Generator Agent Card ── */}
             <AgentCard
-              icon="✍️"
+              icon={PenLine}
               name="Generator Agent"
               role="Writes questions, options & model answers"
               status={generatorStatus}
@@ -955,7 +1263,7 @@ ${JSON.stringify(paper, null, 2)}
             />
             {/* ── Reviewer Agent Card ── */}
             <AgentCard
-              icon="🔍"
+              icon={Search}
               name="Reviewer Agent"
               role="Fact-checks, audits & polishes the paper"
               status={reviewerStatus}
@@ -968,15 +1276,133 @@ ${JSON.stringify(paper, null, 2)}
 
       {/* Error State */}
       {status === "error" && (
-        <div className="bg-white rounded-2xl border border-gray-100 card-shadow-md p-10 max-w-lg mx-auto text-center no-print">
+        <div className="bg-surface rounded-2xl border border-rule card-shadow-md p-10 max-w-lg mx-auto text-center no-print">
           <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-900">Generation Failed</h2>
-          <p className="text-gray-500 text-sm mt-1">{error}</p>
+          <p className="text-graphite text-sm mt-1">{error}</p>
+          {quotaRefunded && (
+            <p className="text-green-700 text-xs font-semibold mt-3 bg-green-50 rounded-lg px-3 py-2 inline-block">
+              Your daily generation credit was refunded — this attempt won&apos;t count against your limit.
+            </p>
+          )}
+          {repairAttemptLogs && repairAttemptLogs.length > 0 && (
+            <div className="text-left text-xs text-graphite bg-gray-50 rounded-lg p-3 mt-3 space-y-1">
+              <p className="font-bold uppercase tracking-wide text-[10px] text-gray-500">What each attempt found</p>
+              {repairAttemptLogs.map((a) => (
+                <p key={a.attempt}>
+                  {/* Never render a.violations directly — those are repair-prompt
+                      instructions aimed at the model, not user copy. */}
+                  Attempt {a.attempt}: {a.violations.length === 0 ? "passed" : buildUserFacingValidationMessage(a.violations)}
+                </p>
+              ))}
+            </div>
+          )}
           <button
             onClick={() => setStatus("idle")}
             className="mt-6 px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-colors"
           >
-            Try Again
+            {retryWorthwhile ? "Try Again" : "Back to form"}
+          </button>
+          {!retryWorthwhile && (
+            <p className="text-graphite text-xs mt-2">Retrying right now won&apos;t help — see the message above for why.</p>
+          )}
+        </div>
+      )}
+
+      {/* Stuck State — no progress within the client-side timeout window.
+          The job may still finish server-side (the poll loop stopped, the
+          job itself did not) — this is the "get out" the old spinner-
+          forever state never gave the user. */}
+      {status === "stuck" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-10 max-w-lg mx-auto text-center no-print">
+          <Clock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-amber-800">This is taking longer than expected</h2>
+          <p className="text-amber-700 text-sm mt-1">{error}</p>
+          <div className="flex gap-3 justify-center mt-6">
+            <button
+              onClick={() => {
+                setStatus("generating");
+                lastProgressRef.current = Date.now();
+                pollAttemptCountRef.current = 0;
+                if (jobId) pollJob(jobId);
+              }}
+              className="px-6 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-sm shadow-md transition-colors"
+            >
+              Keep waiting
+            </button>
+            <button
+              onClick={handleCancelJob}
+              className="px-6 py-3 rounded-xl bg-white border border-amber-300 hover:bg-amber-100 text-amber-900 font-bold text-sm transition-colors"
+            >
+              Cancel and start over
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Connection Lost State — deliberately distinct from "error"/Generation
+          Failed. A 504/network failure on the poll means this browser
+          couldn't reach the server for a few tries in a row; it says
+          nothing about whether the job itself failed. Reconnecting re-reads
+          real state rather than restarting anything. */}
+      {status === "connection_lost" && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-10 max-w-lg mx-auto text-center no-print">
+          <AlertTriangle className="w-12 h-12 text-blue-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-blue-900">Connection lost</h2>
+          <p className="text-blue-800 text-sm mt-1">{error}</p>
+          <div className="flex gap-3 justify-center mt-6">
+            <button
+              onClick={() => {
+                setStatus("generating");
+                consecutivePollFailuresRef.current = 0;
+                lastProgressRef.current = Date.now();
+                if (jobId) pollJob(jobId);
+              }}
+              className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md transition-colors"
+            >
+              Reconnect
+            </button>
+            <button
+              onClick={handleCancelJob}
+              className="px-6 py-3 rounded-xl bg-white border border-blue-300 hover:bg-blue-100 text-blue-900 font-bold text-sm transition-colors"
+            >
+              Cancel and start over
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Quota Exceeded State */}
+      {status === "quota_exceeded" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-10 max-w-lg mx-auto text-center no-print">
+          <Clock className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-amber-800">Daily generation limit reached</h2>
+          <p className="text-amber-700 text-sm mt-1">
+            You&apos;ve used today&apos;s free question paper generations.
+            {quotaResetsAt && ` Resets ${new Date(quotaResetsAt).toLocaleString(undefined, { hour: "numeric", minute: "2-digit", month: "short", day: "numeric" })}.`}
+          </p>
+          <button
+            disabled
+            className="mt-6 px-6 py-3 rounded-xl bg-surface-2 text-gray-400 font-bold text-sm cursor-not-allowed"
+          >
+            Come back after your limit resets
+          </button>
+        </div>
+      )}
+
+      {/* Maintenance State */}
+      {status === "maintenance" && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-10 max-w-lg mx-auto text-center no-print">
+          <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-amber-800">Generation is paused for today</h2>
+          <p className="text-amber-700 text-sm mt-1">
+            We&apos;ve hit our daily processing limit to keep the service running smoothly. Please try again tomorrow.
+          </p>
+          <button
+            disabled
+            className="mt-6 px-6 py-3 rounded-xl bg-surface-2 text-gray-400 font-bold text-sm cursor-not-allowed"
+          >
+            Come back tomorrow
           </button>
         </div>
       )}
@@ -984,62 +1410,112 @@ ${JSON.stringify(paper, null, 2)}
       {/* Paper Presentation Screen */}
       {status === "complete" && paper && (
         <div className="space-y-6">
+          {autosaveError && (
+            <div className="flex items-start gap-3 bg-red-50 border border-red-200 text-red-700 p-4 rounded-2xl text-sm no-print">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600" />
+              <div>
+                <p className="font-semibold">Your last edit didn&apos;t save</p>
+                <p className="text-red-600 mt-0.5">Check your connection and try the edit again — this page still shows your change, but it wasn&apos;t written to the database.</p>
+              </div>
+            </div>
+          )}
+
+          {/* Degraded-generation warning — shown when the AI pipeline hit a
+              problem (usually a transient rate limit) and fell back to
+              either an unreviewed draft or a fully generic placeholder.
+              reviewNotes is the one place that fallback is recorded. */}
+          {(paper.reviewNotes || []).some((n) => n.startsWith("[Warning]")) && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-2xl text-sm no-print">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
+              <div>
+                <p className="font-semibold">This paper wasn&apos;t fully AI-reviewed</p>
+                <p className="text-amber-700 mt-0.5">
+                  {paper.reviewNotes!.find((n) => n.startsWith("[Warning]"))?.replace(/^\[Warning\]\s*/, "")}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Topic-match notice — the topic-vs-topicAddressed keyword check
+              (paperValidation.ts) is a heuristic over free-form model text,
+              not a guarantee, and is deliberately never a hard gate: a false
+              positive here must never block a paper that's actually
+              on-topic. This is the check flagging low confidence, not an
+              error — the paper was still fully generated and reviewed. */}
+          {(paper.reviewNotes || []).some((n) => n.startsWith("[TopicNotice]")) && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-2xl text-sm no-print">
+              <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-600" />
+              <div>
+                <p className="font-semibold">Worth a quick check</p>
+                <p className="text-amber-700 mt-0.5">
+                  {paper.reviewNotes!.find((n) => n.startsWith("[TopicNotice]"))?.replace(/^\[TopicNotice\]\s*/, "")}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Controls toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white border border-gray-100 p-4 rounded-2xl shadow-sm no-print">
-            <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row flex-wrap items-start sm:items-center justify-between gap-2 sm:gap-3 bg-surface border border-rule p-3 sm:p-4 rounded-2xl shadow-sm no-print">
+            <div className="flex gap-1.5 sm:gap-2 flex-wrap">
               <button
                 onClick={() => setViewMode("paper")}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                   viewMode === "paper"
                     ? "bg-blue-50 text-blue-700"
-                    : "text-gray-600 hover:bg-gray-50"
+                    : "text-graphite hover:bg-gray-50"
                 }`}
               >
-                <FileText className="w-4 h-4" /> Question Paper
+                <FileText className="w-4 h-4" /> Question paper
               </button>
               <button
                 onClick={() => setViewMode("answers")}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                   viewMode === "answers"
                     ? "bg-blue-50 text-blue-700"
-                    : "text-gray-600 hover:bg-gray-50"
+                    : "text-graphite hover:bg-gray-50"
                 }`}
               >
-                <Eye className="w-4 h-4" /> Answer Key
+                <Eye className="w-4 h-4" /> Answer key
               </button>
               <button
                 onClick={() => setViewMode("logs")}
                 className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
                   viewMode === "logs"
                     ? "bg-purple-50 text-purple-700"
-                    : "text-gray-600 hover:bg-gray-50"
+                    : "text-graphite hover:bg-gray-50"
                 }`}
               >
-                <Settings className="w-4 h-4" /> Agent Logs
+                <Settings className="w-4 h-4" /> Agent logs
               </button>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-1.5 sm:gap-2">
               <button
                 onClick={handleCopy}
-                className="flex items-center gap-1.5 border border-gray-200 px-4 py-2 rounded-xl text-sm font-semibold bg-white hover:bg-gray-50 text-gray-700 transition-colors"
+                className="flex items-center gap-1.5 border border-gray-200 px-4 py-2 rounded-xl text-sm font-semibold bg-surface hover:bg-gray-50 text-ink transition-colors"
               >
                 {copied ? <CheckCircle className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
-                {copied ? "Copied!" : "Copy Text"}
+                {copied ? "Copied!" : "Copy text"}
               </button>
               <button
                 onClick={handlePrint}
-                className="flex items-center gap-1.5 gradient-primary px-4 py-2 rounded-xl text-sm font-bold text-white shadow-md hover:opacity-95 transition-colors"
+                className="flex items-center gap-1.5 bg-ink px-4 py-2 rounded-xl text-sm font-bold text-paper shadow-md hover:opacity-95 transition-colors"
               >
                 <Printer className="w-4 h-4" /> Print / PDF
               </button>
             </div>
           </div>
 
-          {/* Clean printable exam container */}
+          {/* Clean printable exam container — a real exam paper on real paper
+              does not invert to dark mode any more than a printed page
+              would (see .paper-document overrides in globals.css, same
+              --fixed-* principle as MarkedAnswerSheet.tsx's homepage
+              mockup). bg-fixed-paper/border-fixed-rule instead of the
+              normal bg-surface/border-rule keeps this card literal paper
+              regardless of site theme. */}
           {viewMode !== "logs" ? (
             <>
-              <div className="bg-white rounded-3xl border border-gray-150 shadow-xl p-10 md:p-14 print-content font-serif">
+              <div className="paper-document bg-fixed-paper rounded-3xl border border-fixed-rule shadow-xl p-5 sm:p-10 md:p-14 print-content font-serif">
               {/* Header Title */}
               <div className="text-center pb-2 no-print">
                 <input
@@ -1047,10 +1523,10 @@ ${JSON.stringify(paper, null, 2)}
                   value={institutionName}
                   onChange={(e) => setInstitutionName(e.target.value)}
                   onBlur={handleMetadataBlur}
-                  className="w-full text-center text-2xl font-bold uppercase tracking-wider text-gray-900 bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-2 transition-all"
+                  className="w-full text-center text-2xl font-bold uppercase tracking-wider text-gray-900 bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-surface focus:outline-none rounded px-2 transition-all"
                   style={{ fontFamily: "serif" }}
                 />
-                <h2 className="text-sm font-bold tracking-wide text-gray-600 uppercase mt-1">
+                <h2 className="text-sm font-bold tracking-wide text-graphite uppercase mt-1">
                   Term End Examination • {paper.subject}
                 </h2>
               </div>
@@ -1058,13 +1534,13 @@ ${JSON.stringify(paper, null, 2)}
                 <h1 className="text-2xl font-bold uppercase tracking-wider text-gray-900" style={{ fontFamily: "serif" }}>
                   {institutionName || "UNIVERSITY EXAMINATION BOARD"}
                 </h1>
-                <h2 className="text-sm font-bold tracking-wide text-gray-600 uppercase mt-1">
+                <h2 className="text-sm font-bold tracking-wide text-graphite uppercase mt-1">
                   Term End Examination • {paper.subject}
                 </h2>
               </div>
 
               {/* Student Identity and Exam Details Grid */}
-              <div className="border-t-2 border-b-2 border-gray-800 py-4 my-6 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-medium">
+              <div className="border-t-2 border-b-2 border-gray-800 py-4 my-4 sm:my-6 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 text-xs font-medium">
                 {/* Left Side: Exam Metadata */}
                 <div className="space-y-1">
                   <div className="flex items-center gap-1.5 no-print">
@@ -1075,7 +1551,7 @@ ${JSON.stringify(paper, null, 2)}
                       onChange={(e) => setCourseCode(e.target.value)}
                       onBlur={handleMetadataBlur}
                       placeholder="Enter code"
-                      className="bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-1 text-xs transition-all w-32 uppercase font-bold"
+                      className="bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-surface focus:outline-none rounded px-1 text-xs transition-all w-32 uppercase font-bold"
                     />
                   </div>
                   <div className="hidden print:block font-bold">
@@ -1089,7 +1565,7 @@ ${JSON.stringify(paper, null, 2)}
                       value={timeAllowed}
                       onChange={(e) => setTimeAllowed(e.target.value)}
                       onBlur={handleMetadataBlur}
-                      className="bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:outline-none rounded px-1 text-xs transition-all w-32"
+                      className="bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-surface focus:outline-none rounded px-1 text-xs transition-all w-32"
                     />
                   </div>
                   <div className="hidden print:block">
@@ -1115,16 +1591,16 @@ ${JSON.stringify(paper, null, 2)}
               {/* Instructions */}
               {instructions && (
                 <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl mb-8 text-xs italic">
-                  <strong className="block text-gray-700 not-italic uppercase tracking-wider mb-1 no-print">General Instructions (Click to Edit):</strong>
-                  <strong className="hidden print:block text-gray-700 not-italic uppercase tracking-wider mb-1">General Instructions:</strong>
+                  <strong className="block text-ink not-italic uppercase tracking-wider mb-1 no-print">General Instructions (Click to Edit):</strong>
+                  <strong className="hidden print:block text-ink not-italic uppercase tracking-wider mb-1">General Instructions:</strong>
                   <textarea
                     value={instructions}
                     onChange={(e) => setInstructions(e.target.value)}
                     onBlur={handleMetadataBlur}
                     rows={2}
-                    className="w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-white focus:outline-none rounded p-1 text-xs text-gray-650 leading-relaxed resize-y font-serif italic no-print"
+                    className="w-full bg-transparent border border-transparent hover:border-gray-200 focus:border-blue-500 focus:bg-surface focus:outline-none rounded p-1 text-xs text-graphite leading-relaxed resize-y font-serif italic no-print"
                   />
-                  <div className="hidden print:block whitespace-pre-line text-gray-600">{instructions}</div>
+                  <div className="hidden print:block whitespace-pre-line text-graphite">{instructions}</div>
                 </div>
               )}
 
@@ -1134,7 +1610,7 @@ ${JSON.stringify(paper, null, 2)}
                   <div key={sIdx} className="space-y-4">
                     <div className="border-b border-gray-300 pb-2">
                       <h2 className="text-base font-bold uppercase tracking-wide text-gray-900">{section.title}</h2>
-                      <p className="text-gray-500 text-xs mt-0.5 italic">{section.description}</p>
+                      <p className="text-graphite text-xs mt-0.5 italic">{section.description}</p>
                     </div>
 
                     <div className="space-y-6">
@@ -1162,7 +1638,7 @@ ${JSON.stringify(paper, null, 2)}
                             {isEditing ? (
                               <div className="bg-blue-50/50 border border-blue-100 rounded-2xl p-4 space-y-3 no-print">
                                 <div>
-                                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Question Text</label>
+                                  <label className="block text-xs font-bold text-graphite uppercase tracking-wide mb-1">Question Text</label>
                                   <textarea
                                     value={editQuestionText}
                                     onChange={(e) => setEditQuestionText(e.target.value)}
@@ -1173,7 +1649,7 @@ ${JSON.stringify(paper, null, 2)}
 
                                 <div className="grid grid-cols-2 gap-4">
                                   <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Marks</label>
+                                    <label className="block text-xs font-bold text-graphite uppercase tracking-wide mb-1">Marks</label>
                                     <input
                                       type="number"
                                       value={editQuestionMarks}
@@ -1182,7 +1658,7 @@ ${JSON.stringify(paper, null, 2)}
                                     />
                                   </div>
                                   <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Answer Key</label>
+                                    <label className="block text-xs font-bold text-graphite uppercase tracking-wide mb-1">Answer Key</label>
                                     <input
                                       type="text"
                                       value={editQuestionAnswer}
@@ -1194,7 +1670,7 @@ ${JSON.stringify(paper, null, 2)}
 
                                 {editQuestionOptions.length > 0 && (
                                   <div className="space-y-2">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">MCQ Options</label>
+                                    <label className="block text-xs font-bold text-graphite uppercase tracking-wide mb-1">MCQ Options</label>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                                       {editQuestionOptions.map((opt, oIdx) => (
                                         <div key={oIdx} className="flex items-center gap-2">
@@ -1218,7 +1694,7 @@ ${JSON.stringify(paper, null, 2)}
                                 <div className="flex gap-2 justify-end pt-1">
                                   <button
                                     onClick={() => setEditingIndex(null)}
-                                    className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:bg-gray-150 rounded-lg"
+                                    className="px-3 py-1.5 text-xs font-semibold text-graphite hover:bg-surface-2 rounded-lg"
                                   >
                                     Cancel
                                   </button>
@@ -1242,7 +1718,7 @@ ${JSON.stringify(paper, null, 2)}
                                       savePaperEdits(updatedPaper);
                                       setEditingIndex(null);
                                     }}
-                                    className="px-3 py-1.5 text-xs font-bold text-white gradient-primary rounded-lg shadow-sm"
+                                    className="px-3 py-1.5 text-xs font-bold text-paper bg-ink rounded-lg shadow-sm"
                                   >
                                     Save Question
                                   </button>
@@ -1253,9 +1729,9 @@ ${JSON.stringify(paper, null, 2)}
                                 <div className="flex items-start justify-between gap-4">
                                   <p className="text-gray-900 font-medium flex-1">
                                     <span className="font-bold mr-1.5">Q{q.number}.</span>
-                                    {q.question}
+                                    {cleanMathText(q.question)}
                                   </p>
-                                  <span className="text-xs font-bold text-gray-500 whitespace-nowrap">
+                                  <span className="text-xs font-bold text-graphite whitespace-nowrap">
                                     [{q.marks} Mark{q.marks > 1 ? "s" : ""}]
                                   </span>
                                 </div>
@@ -1264,11 +1740,11 @@ ${JSON.stringify(paper, null, 2)}
                                 {q.options && q.options.length > 0 && (
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3 pl-6">
                                     {q.options.map((opt, oIdx) => (
-                                      <p key={oIdx} className="text-sm text-gray-700">
-                                        <span className="font-semibold text-gray-500 mr-2">
+                                      <p key={oIdx} className="text-sm text-ink">
+                                        <span className="font-semibold text-graphite mr-2">
                                           {String.fromCharCode(65 + oIdx)}.
                                         </span>
-                                        {opt}
+                                        {cleanMathText(opt)}
                                       </p>
                                     ))}
                                   </div>
@@ -1281,8 +1757,23 @@ ${JSON.stringify(paper, null, 2)}
                                       Correct Answer / Evaluator Rubric:
                                     </p>
                                     <p className="text-sm text-blue-900 font-medium">
-                                      {q.answer}
+                                      {cleanMathText(q.answer)}
                                     </p>
+                                    {q.markScheme && q.markScheme.length > 0 && (
+                                      <div className="mt-3 pt-3 border-t border-blue-200">
+                                        <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-1.5">
+                                          Mark Scheme:
+                                        </p>
+                                        <ul className="space-y-1">
+                                          {q.markScheme.map((p, pIdx) => (
+                                            <li key={pIdx} className="text-sm text-blue-900 flex justify-between gap-3">
+                                              <span>{cleanMathText(p.point)}</span>
+                                              <span className="font-bold flex-shrink-0">{p.marks} {p.marks === 1 ? "mark" : "marks"}</span>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </>
@@ -1297,22 +1788,22 @@ ${JSON.stringify(paper, null, 2)}
             </div>
 
             {/* AI Refinement Feedback Card */}
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-md p-6 mt-6 no-print space-y-4 animate-fade-in">
+            <div className="bg-surface rounded-3xl border border-rule shadow-md p-6 mt-6 no-print space-y-4 animate-fade-in">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center text-white flex-shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-fixed-ink flex items-center justify-center text-white flex-shrink-0">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-905" style={{ fontFamily: "var(--font-poppins)" }}>
-                    AI Paper Refinement & Tweaks
+                  <h3 className="text-base font-bold text-gray-900" style={{ fontFamily: "var(--font-display)" }}>
+                    AI paper refinement and tweaks
                   </h3>
-                  <p className="text-xs text-gray-500">
-                    Instruct the agents to update the paper (e.g. "change Section A questions to be more focused on algorithms").
+                  <p className="text-xs text-graphite">
+                    Instruct the agents to update the paper (e.g. &quot;change Section A questions to be more focused on algorithms&quot;).
                   </p>
                 </div>
               </div>
 
-              <div className="flex gap-2 items-end">
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
                 <textarea
                   value={aiFeedback}
                   onChange={(e) => setAiFeedback(e.target.value)}
@@ -1323,22 +1814,22 @@ ${JSON.stringify(paper, null, 2)}
                 <button
                   onClick={handleAIRefine}
                   disabled={!aiFeedback.trim()}
-                  className="inline-flex items-center gap-2 gradient-primary text-white font-semibold text-sm px-5 py-3.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                  className="inline-flex items-center gap-2 bg-ink text-paper font-semibold text-sm px-5 py-3.5 rounded-xl hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
                 >
                   <Sparkles className="w-4 h-4" />
-                  Apply Tweaks
+                  Apply tweaks
                 </button>
               </div>
             </div>
           </>
         ) : (
             // Agent logs timeline view
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm space-y-8 no-print">
+            <div className="bg-surface rounded-2xl border border-rule p-8 shadow-sm space-y-8 no-print">
               <div>
-                <h2 className="text-xl font-bold text-gray-900 mb-1" style={{ fontFamily: "var(--font-poppins)" }}>
+                <h2 className="text-xl font-bold text-gray-900 mb-1" style={{ fontFamily: "var(--font-display)" }}>
                   Agent Collaborative Audit Trail
                 </h2>
-                <p className="text-gray-500 text-sm">
+                <p className="text-graphite text-sm">
                   Trace outputs and quality checks produced during paper generation.
                 </p>
               </div>
@@ -1351,7 +1842,7 @@ ${JSON.stringify(paper, null, 2)}
                     <Calendar className="w-4 h-4 text-blue-500" />
                     Planner Agent Outline
                   </h3>
-                  <div className="mt-2 bg-gray-50 border border-gray-100 rounded-xl p-4 text-xs font-mono text-gray-600 max-h-60 overflow-auto">
+                  <div className="mt-2 bg-gray-50 border border-rule rounded-xl p-4 text-xs font-mono text-graphite max-h-60 overflow-auto">
                     {plannerPlan ? JSON.stringify(plannerPlan, null, 2) : "No planner logs found"}
                   </div>
                 </div>
@@ -1363,7 +1854,7 @@ ${JSON.stringify(paper, null, 2)}
                     <FileText className="w-4 h-4 text-indigo-500" />
                     Generator Agent Draft
                   </h3>
-                  <div className="mt-2 bg-gray-50 border border-gray-100 rounded-xl p-4 text-xs font-mono text-gray-600 max-h-60 overflow-auto">
+                  <div className="mt-2 bg-gray-50 border border-rule rounded-xl p-4 text-xs font-mono text-graphite max-h-60 overflow-auto">
                     {generatorDraft ? JSON.stringify(generatorDraft, null, 2) : "No generator logs found"}
                   </div>
                 </div>
@@ -1373,15 +1864,27 @@ ${JSON.stringify(paper, null, 2)}
                   <div className="absolute -left-1 top-0.5 w-4 h-4 rounded-full bg-green-500 border-4 border-white" />
                   <h3 className="font-bold text-gray-900 flex items-center gap-2">
                     <Search className="w-4 h-4 text-green-500" />
-                    Quality & Reviewer Audit Notes
+                    Quality and reviewer audit notes
                   </h3>
                   <ul className="mt-3 space-y-2">
-                    {(paper.reviewNotes || []).map((note, idx) => (
-                      <li key={idx} className="flex items-start gap-2 bg-green-50 text-green-800 px-4 py-2.5 rounded-xl text-sm font-semibold">
-                        <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
-                        <span>{note}</span>
-                      </li>
-                    ))}
+                    {(paper.reviewNotes || []).map((note, idx) => {
+                      const isWarning = note.startsWith("[Warning]") || note.startsWith("[TopicNotice]");
+                      return (
+                        <li
+                          key={idx}
+                          className={`flex items-start gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold ${
+                            isWarning ? "bg-amber-50 text-amber-800" : "bg-green-50 text-green-800"
+                          }`}
+                        >
+                          {isWarning ? (
+                            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          ) : (
+                            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                          )}
+                          <span>{isWarning ? note.replace(/^\[Warning\]\s*/, "").replace(/^\[TopicNotice\]\s*/, "") : note}</span>
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               </div>

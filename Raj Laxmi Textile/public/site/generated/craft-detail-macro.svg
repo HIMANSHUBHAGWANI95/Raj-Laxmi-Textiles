@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1400" viewBox="0 0 1400 1400">
+  <rect width="1400" height="1400" fill="#F1EBDF"/>
+
+  <line x1="42" y1="42" x2="1358" y2="1358" stroke="#1A1614" stroke-opacity="0.07" stroke-width="5"/>
+  <line x1="1358" y1="42" x2="42" y2="1358" stroke="#1A1614" stroke-opacity="0.07" stroke-width="5"/>
+  <rect x="42" y="42" width="1316" height="1316" fill="none" stroke="#1A1614" stroke-opacity="0.16" stroke-width="5"/>
+
+  <rect x="0" y="0" width="1400" height="13" fill="#E39A15"/>
+
+  <text x="112" y="188" font-family="Helvetica, Arial, sans-serif" font-size="76" font-weight="700" fill="#1E3A6B">craft-detail-macro</text>
+
+  <text x="112" y="314" font-family="Helvetica, Arial, sans-serif" font-size="48" fill="#1A1614">Macro of the print surface showing</text>
+  <text x="112" y="384" font-family="Helvetica, Arial, sans-serif" font-size="48" fill="#1A1614">registration and weave</text>
+  <text x="112" y="510" font-family="Helvetica, Arial, sans-serif" font-size="43" fill="#1A1614" fill-opacity="0.62">Close enough to read the white outline sitting</text>
+  <text x="112" y="575" font-family="Helvetica, Arial, sans-serif" font-size="43" fill="#1A1614" fill-opacity="0.62">against the fill and the individual threads of the</text>
+  <text x="112" y="640" font-family="Helvetica, Arial, sans-serif" font-size="43" fill="#1A1614" fill-opacity="0.62">cloth.</text>
+
+  <text x="112" y="1288" font-family="Helvetica, Arial, sans-serif" font-size="43" fill="#1A1614" fill-opacity="0.62">1400 x 1400 — 1:1 — PLACEHOLDER, NOT FINAL ARTWORK</text>
+</svg>

@@ -1,0 +1,181 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200">
+  <defs>
+    
+    <pattern id="d-field" width="54" height="54" patternUnits="userSpaceOnUse">
+      <rect width="54" height="54" fill="#3F6B39"/>
+      <rect width="7.56" height="54" fill="#2C4E28"/>
+      <rect x="24.84" width="3.78" height="54" fill="#FCFBF8" opacity="0.20"/>
+    </pattern>
+    
+    <pattern id="d-threads" width="4" height="4" patternUnits="userSpaceOnUse">
+      <rect width="4" height="1" fill="#000000" opacity="0.055"/>
+      <rect width="1" height="4" fill="#FFFFFF" opacity="0.05"/>
+    </pattern>
+
+    <filter id="d-weave" x="0" y="0" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" seed="503"/>
+      <feColorMatrix type="saturate" values="0"/>
+    </filter>
+
+    <filter id="d-cloth" x="-10%" y="-10%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="7" stdDeviation="14" flood-color="#1A1614" flood-opacity="0.26"/>
+    </filter>
+
+    <filter id="d-fold" x="-12%" y="-30%" width="130%" height="180%">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#1A1614" flood-opacity="0.36"/>
+    </filter>
+
+    <filter id="d-ink" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="0.7"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="1200" fill="url(#d-field)"/>
+
+  <!-- the scalloped wave at full scale, showing the screen's edge -->
+  <g transform="translate(0 792)">
+    <path d="M 0 0 Q 42.5 -30 85 0 Q 127.5 30 170 0 Q 212.5 -30 255 0 Q 297.5 30 340 0 Q 382.5 -30 425 0 Q 467.5 30 510 0 Q 552.5 -30 595 0 Q 637.5 30 680 0 Q 722.5 -30 765 0 Q 807.5 30 850 0 Q 892.5 -30 935 0 Q 977.5 30 1020 0 Q 1062.5 -30 1105 0 Q 1147.5 30 1190 0 Q 1232.5 -30 1275 0 Q 1317.5 30 1360 0 " fill="none" stroke="#FCFBF8" stroke-width="16"/>
+    <path d="M 0 0 Q 42.5 -30 85 0 Q 127.5 30 170 0 Q 212.5 -30 255 0 Q 297.5 30 340 0 Q 382.5 -30 425 0 Q 467.5 30 510 0 Q 552.5 -30 595 0 Q 637.5 30 680 0 Q 722.5 -30 765 0 Q 807.5 30 850 0 Q 892.5 -30 935 0 Q 977.5 30 1020 0 Q 1062.5 -30 1105 0 Q 1147.5 30 1190 0 Q 1232.5 -30 1275 0 Q 1317.5 30 1360 0 " fill="none" stroke="#E39A15" stroke-width="5"/>
+  </g>
+
+  <g transform="translate(980 210) rotate(2.54) scale(2.3)"><g>
+      <path d="M 0 58 C -3 26, -3 -6, 0 -40" fill="none" stroke="#FCFBF8" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M 0 44
+       C -30 47, -50 32, -46 10
+       C -27 19, -9 31, 0 44 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 36
+       C 28.2 38.82, 47 24.72, 43.24 4.04
+       C 25.38 12.5, 8.46 23.78, 0 36 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 12
+       C -23.4 14.34, -39 2.64, -35.88 -14.52
+       C -21.06 -7.5, -7.02 1.86, 0 12 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 4
+       C 21.6 6.16, 36 -4.64, 33.12 -20.48
+       C 19.44 -14, 6.48 -5.36, 0 4 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -16
+       C -16.8 -14.32, -28 -22.72, -25.76 -35.04
+       C -15.12 -30, -5.04 -23.28, 0 -16 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -22
+       C 15.6 -20.44, 26 -28.24, 23.92 -39.68
+       C 14.04 -35, 4.68 -28.76, 0 -22 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -38 C -11 -45, -11 -59, 0 -68 C 11 -59, 11 -45, 0 -38 Z"
+            fill="#E39A15" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+    </g></g>
+  <g transform="translate(960 1010) rotate(1.2) scale(2.6)"><g>
+      <path d="M 0 58 C -3 26, -3 -6, 0 -40" fill="none" stroke="#E39A15" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M 0 44
+       C -30 47, -50 32, -46 10
+       C -27 19, -9 31, 0 44 Z" fill="#E39A15" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 36
+       C 28.2 38.82, 47 24.72, 43.24 4.04
+       C 25.38 12.5, 8.46 23.78, 0 36 Z" fill="#E39A15" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 12
+       C -23.4 14.34, -39 2.64, -35.88 -14.52
+       C -21.06 -7.5, -7.02 1.86, 0 12 Z" fill="#E39A15" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 4
+       C 21.6 6.16, 36 -4.64, 33.12 -20.48
+       C 19.44 -14, 6.48 -5.36, 0 4 Z" fill="#E39A15" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -16
+       C -16.8 -14.32, -28 -22.72, -25.76 -35.04
+       C -15.12 -30, -5.04 -23.28, 0 -16 Z" fill="#E39A15" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -22
+       C 15.6 -20.44, 26 -28.24, 23.92 -39.68
+       C 14.04 -35, 4.68 -28.76, 0 -22 Z" fill="#E39A15" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -38 C -11 -45, -11 -59, 0 -68 C 11 -59, 11 -45, 0 -38 Z"
+            fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+    </g></g>
+  <g transform="translate(300 1080) rotate(-15.83) scale(2)"><g>
+      <path d="M 0 58 C -3 26, -3 -6, 0 -40" fill="none" stroke="#FCFBF8" stroke-width="5.5" stroke-linecap="round"/>
+      <path d="M 0 44
+       C -30 47, -50 32, -46 10
+       C -27 19, -9 31, 0 44 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 36
+       C 28.2 38.82, 47 24.72, 43.24 4.04
+       C 25.38 12.5, 8.46 23.78, 0 36 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 12
+       C -23.4 14.34, -39 2.64, -35.88 -14.52
+       C -21.06 -7.5, -7.02 1.86, 0 12 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 4
+       C 21.6 6.16, 36 -4.64, 33.12 -20.48
+       C 19.44 -14, 6.48 -5.36, 0 4 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -16
+       C -16.8 -14.32, -28 -22.72, -25.76 -35.04
+       C -15.12 -30, -5.04 -23.28, 0 -16 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -22
+       C 15.6 -20.44, 26 -28.24, 23.92 -39.68
+       C 14.04 -35, 4.68 -28.76, 0 -22 Z" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M 0 -38 C -11 -45, -11 -59, 0 -68 C 11 -59, 11 -45, 0 -38 Z"
+            fill="#E39A15" stroke="#FCFBF8" stroke-width="3" stroke-linejoin="round"/>
+    </g></g>
+  <g transform="translate(230 150) rotate(-8.01) scale(1.8)"><g>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(0)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(45)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(90)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(135)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(180)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(225)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(270)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(315)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <circle cx="36.96" cy="15.31" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="15.31" cy="36.96" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="-15.31" cy="36.96" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="-36.96" cy="15.31" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="-36.96" cy="-15.31" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="-15.31" cy="-36.96" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="15.31" cy="-36.96" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="36.96" cy="-15.31" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="0" cy="0" r="19" fill="#E39A15" stroke="#FCFBF8" stroke-width="3.2"/>
+      <circle cx="0" cy="0" r="7.5" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="1.8"/>
+    </g></g>
+
+  <!-- a second screen a hair out of registration, as in real printing -->
+  <g transform="translate(535 510) rotate(-6) scale(4.2)" opacity="0.22">
+    <g>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(0)" fill="#E39A15" stroke="#E39A15" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(45)" fill="#E39A15" stroke="#E39A15" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(90)" fill="#E39A15" stroke="#E39A15" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(135)" fill="#E39A15" stroke="#E39A15" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(180)" fill="#E39A15" stroke="#E39A15" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(225)" fill="#E39A15" stroke="#E39A15" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(270)" fill="#E39A15" stroke="#E39A15" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(315)" fill="#E39A15" stroke="#E39A15" stroke-width="3.2" stroke-linejoin="round"/>
+      <circle cx="36.96" cy="15.31" r="4.4" fill="#E39A15" stroke="#E39A15" stroke-width="1.6"/>
+      <circle cx="15.31" cy="36.96" r="4.4" fill="#E39A15" stroke="#E39A15" stroke-width="1.6"/>
+      <circle cx="-15.31" cy="36.96" r="4.4" fill="#E39A15" stroke="#E39A15" stroke-width="1.6"/>
+      <circle cx="-36.96" cy="15.31" r="4.4" fill="#E39A15" stroke="#E39A15" stroke-width="1.6"/>
+      <circle cx="-36.96" cy="-15.31" r="4.4" fill="#E39A15" stroke="#E39A15" stroke-width="1.6"/>
+      <circle cx="-15.31" cy="-36.96" r="4.4" fill="#E39A15" stroke="#E39A15" stroke-width="1.6"/>
+      <circle cx="15.31" cy="-36.96" r="4.4" fill="#E39A15" stroke="#E39A15" stroke-width="1.6"/>
+      <circle cx="36.96" cy="-15.31" r="4.4" fill="#E39A15" stroke="#E39A15" stroke-width="1.6"/>
+      <circle cx="0" cy="0" r="19" fill="#E39A15" stroke="#E39A15" stroke-width="3.2"/>
+      <circle cx="0" cy="0" r="7.5" fill="#E39A15" stroke="#E39A15" stroke-width="1.8"/>
+    </g>
+  </g>
+
+  <!-- hero motif, large enough to read the white outline and the stripe rhythm -->
+  <g transform="translate(528 504) rotate(-6) scale(4.2)" filter="url(#d-ink)">
+    <g>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(0)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(45)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(90)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(135)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(180)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(225)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(270)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M 0 -18 C -17 -31, -17 -55, 0 -68 C 17 -55, 17 -31, 0 -18 Z" transform="rotate(315)" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="3.2" stroke-linejoin="round"/>
+      <circle cx="36.96" cy="15.31" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="15.31" cy="36.96" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="-15.31" cy="36.96" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="-36.96" cy="15.31" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="-36.96" cy="-15.31" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="-15.31" cy="-36.96" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="15.31" cy="-36.96" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="36.96" cy="-15.31" r="4.4" fill="#E39A15" stroke="#FCFBF8" stroke-width="1.6"/>
+      <circle cx="0" cy="0" r="19" fill="#E39A15" stroke="#FCFBF8" stroke-width="3.2"/>
+      <circle cx="0" cy="0" r="7.5" fill="#FCFBF8" stroke="#FCFBF8" stroke-width="1.8"/>
+    </g>
+  </g>
+
+  <rect width="1200" height="1200" fill="url(#d-threads)"/>
+  <rect width="1200" height="1200" filter="url(#d-weave)" opacity="0.13"/>
+</svg>

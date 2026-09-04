@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from "react";
 
-export type ThemeType = "default" | "dark" | "emerald" | "sunset";
+export type ThemeType = "default" | "dark";
 
 interface ThemeContextType {
   theme: ThemeType;
@@ -17,23 +17,19 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const applyThemeClass = (newTheme: ThemeType) => {
     if (typeof window === "undefined") return;
     const root = document.documentElement;
-    // Remove existing themes
-    root.classList.remove("theme-dark", "theme-emerald", "theme-sunset");
-
-    // Add new theme
+    root.classList.remove("theme-dark");
     if (newTheme === "dark") root.classList.add("theme-dark");
-    else if (newTheme === "emerald") root.classList.add("theme-emerald");
-    else if (newTheme === "sunset") root.classList.add("theme-sunset");
   };
 
   useEffect(() => {
-    // Read from localStorage on mount
+    // The blocking inline script in layout.tsx already applied the right
+    // class before first paint (saved preference, or system preference on a
+    // first visit) — this just syncs React state to match, no re-apply needed.
     const savedTheme = localStorage.getItem("site-theme") as ThemeType;
-    if (savedTheme && ["default", "dark", "emerald", "sunset"].includes(savedTheme)) {
-      setTimeout(() => {
-        setThemeState(savedTheme);
-        applyThemeClass(savedTheme);
-      }, 0);
+    if (savedTheme && ["default", "dark"].includes(savedTheme)) {
+      setThemeState(savedTheme);
+    } else if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
+      setThemeState("dark");
     }
   }, []);
 

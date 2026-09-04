@@ -1,0 +1,9 @@
+# Build output — Vercel builds from source.
+.next
+
+# Source SVGs for the generated renders: development artifacts, never served.
+public/products/generated/**/*.svg
+public/site/generated/*.svg
+
+# Local scratch
+*.log

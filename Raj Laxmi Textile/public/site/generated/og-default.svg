@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#F1EBDF"/>
+
+  <line x1="19" y1="19" x2="1181" y2="611" stroke="#1A1614" stroke-opacity="0.07" stroke-width="2"/>
+  <line x1="1181" y1="19" x2="19" y2="611" stroke="#1A1614" stroke-opacity="0.07" stroke-width="2"/>
+  <rect x="19" y="19" width="1162" height="592" fill="none" stroke="#1A1614" stroke-opacity="0.16" stroke-width="2"/>
+
+  <rect x="0" y="0" width="1200" height="6" fill="#E39A15"/>
+
+  <text x="50" y="84" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="700" fill="#1E3A6B">og-default</text>
+
+  <text x="50" y="141" font-family="Helvetica, Arial, sans-serif" font-size="21" fill="#1A1614">Social share card: printed cloth, room for</text>
+  <text x="50" y="171" font-family="Helvetica, Arial, sans-serif" font-size="21" fill="#1A1614">an overlay</text>
+  <text x="50" y="226" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#1A1614" fill-opacity="0.62">Flat-on cloth filling frame, no important detail in</text>
+  <text x="50" y="256" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#1A1614" fill-opacity="0.62">the centre third where text may overlay.</text>
+
+  <text x="50" y="580" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#1A1614" fill-opacity="0.62">1200 x 630 — 1.91:1 — PLACEHOLDER, NOT FINAL ARTWORK</text>
+</svg>

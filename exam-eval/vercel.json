@@ -1,0 +1,23 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "prisma generate && prisma migrate deploy && next build",
+  "installCommand": "npm ci",
+  "crons": [
+    {
+      "path": "/api/cron/sweep-evaluations",
+      "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/queue-alert",
+      "schedule": "0 2 * * *"
+    },
+    {
+      "path": "/api/cron/purge-old-logs",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/sweep-paper-jobs",
+      "schedule": "0 4 * * *"
+    }
+  ]
+}

@@ -1,49 +1,240 @@
 "use client";
 
-import { useSession } from "next-auth/react";
-import { User, Bell, Shield, CreditCard, Palette, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useSession, signOut } from "next-auth/react";
+import { User, Bell, Shield, Palette, ChevronRight, Loader2, AlertTriangle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useTheme } from "@/components/ThemeProvider";
 
 const sections = [
   { id: "profile", icon: User, label: "Profile" },
   { id: "notifications", icon: Bell, label: "Notifications" },
   { id: "security", icon: Shield, label: "Security" },
-  { id: "subscription", icon: CreditCard, label: "Subscription" },
   { id: "appearance", icon: Palette, label: "Appearance" },
 ];
 
 export default function SettingsPage() {
-  const { data: session } = useSession();
+  const { data: session, update } = useSession();
   const { theme, setTheme } = useTheme();
+  const router = useRouter();
   const [activeSection, setActiveSection] = useState("profile");
   const [saved, setSaved] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteConfirming, setDeleteConfirming] = useState(false);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // Profile fields state
+  const [profileName, setProfileName] = useState("");
+  const [profileEmail, setProfileEmail] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [profileLoading, setProfileLoading] = useState(false);
+
+  // Sync profile fields from session
+  useEffect(() => {
+    if (session?.user) {
+      const t = setTimeout(() => {
+        setProfileName(session.user!.name || "");
+        setProfileEmail(session.user!.email || "");
+      }, 0);
+      return () => clearTimeout(t);
+    }
+  }, [session]);
+
+  // Security password change states
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [passwordSuccess, setPasswordSuccess] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
+  // Notifications state
+  const [evalEmail, setEvalEmail] = useState(true);
+  const [featureEmail, setFeatureEmail] = useState(true);
+  const [weeklyEmail, setWeeklyEmail] = useState(false);
+  const [pushNotif, setPushNotif] = useState(true);
+  const [notificationsSaved, setNotificationsSaved] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsError, setNotificationsError] = useState("");
+  // The four toggles above start at hardcoded defaults, not the user's real
+  // saved values — if the load below fails, those defaults stay on screen
+  // looking exactly like real settings. Saving from that state would
+  // silently overwrite the user's actual preferences with the wrong
+  // defaults. Tracked so Save can refuse to run until a real load succeeds.
+  const [notificationsLoadFailed, setNotificationsLoadFailed] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/user/notification-preferences")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`status ${r.status}`))))
+      .then((d) => {
+        if (d.success && d.preferences) {
+          setEvalEmail(d.preferences.evaluationCompletion);
+          setFeatureEmail(d.preferences.featureUpdates);
+          setWeeklyEmail(d.preferences.weeklyProgress);
+          setPushNotif(d.preferences.pushNotifications);
+        } else {
+          setNotificationsLoadFailed(true);
+        }
+      })
+      .catch(() => setNotificationsLoadFailed(true));
+  }, []);
+
+  const handleSave = async () => {
+    setProfileError("");
+    setSaved(false);
+    setProfileLoading(true);
+
+    if (!profileName.trim()) {
+      setProfileError("Full name is required");
+      setProfileLoading(false);
+      return;
+    }
+
+    if (!profileEmail.trim() || !profileEmail.includes("@")) {
+      setProfileError("A valid email address is required");
+      setProfileLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: profileName, email: profileEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setProfileError(data.error || "Failed to update profile settings");
+      } else {
+        setSaved(true);
+        // Refresh session token content
+        await update();
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch {
+      setProfileError("Couldn't reach the server to save your profile. Check your connection and try again.");
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+    setPasswordSuccess("");
+
+    if (!currentPassword) {
+      setPasswordError("Current password is required");
+      return;
+    }
+    if (newPassword.length < 6) {
+      setPasswordError("New password must be at least 6 characters");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("New passwords do not match");
+      return;
+    }
+
+    setPasswordLoading(true);
+    try {
+      const res = await fetch("/api/user/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPasswordError(data.error || "Failed to update password");
+      } else {
+        setPasswordSuccess("Password updated successfully!");
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch {
+      setPasswordError("Couldn't reach the server to change your password. Check your connection and try again.");
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError("");
+    setDeleteLoading(true);
+    try {
+      const res = await fetch("/api/user/delete-account", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: deletePassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setDeleteError(data.error || "Failed to delete account");
+        setDeleteLoading(false);
+        return;
+      }
+      await signOut({ redirect: false });
+      router.push("/");
+    } catch {
+      setDeleteError("Couldn't reach the server to delete your account. Check your connection and try again.");
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleNotificationsSave = async () => {
+    if (notificationsLoadFailed) {
+      setNotificationsError("Your current preferences couldn't be loaded, so saving now would overwrite them with defaults. Refresh the page and try again.");
+      return;
+    }
+    setNotificationsError("");
+    setNotificationsLoading(true);
+    try {
+      const res = await fetch("/api/user/notification-preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          evaluationCompletion: evalEmail,
+          featureUpdates: featureEmail,
+          weeklyProgress: weeklyEmail,
+          pushNotifications: pushNotif,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setNotificationsError(data.error || "Failed to save notification preferences");
+      } else {
+        setNotificationsSaved(true);
+        setTimeout(() => setNotificationsSaved(false), 2000);
+      }
+    } catch {
+      setNotificationsError("Couldn't reach the server to save your preferences. Check your connection and try again.");
+    } finally {
+      setNotificationsLoading(false);
+    }
   };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "var(--font-poppins)" }}>
+        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display)" }}>
           Settings
         </h1>
-        <p className="text-gray-500 text-sm">Manage your account preferences</p>
+        <p className="text-graphite text-sm">Manage your account preferences</p>
       </div>
 
       <div className="grid lg:grid-cols-4 gap-6">
         {/* Sidebar nav */}
-        <div className="bg-white rounded-2xl border border-gray-100 card-shadow-md p-3 h-fit">
+        <div className="bg-surface rounded-2xl border border-rule card-shadow-md p-3 h-fit">
           {sections.map((s) => (
             <button
               key={s.id}
               onClick={() => setActiveSection(s.id)}
               className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all ${
                 activeSection === s.id
-                  ? "gradient-primary text-white"
-                  : "text-gray-600 hover:bg-gray-50"
+                  ? "bg-ink text-paper"
+                  : "text-graphite hover:bg-gray-50"
               }`}
             >
               <div className="flex items-center gap-3">
@@ -56,144 +247,129 @@ export default function SettingsPage() {
         </div>
 
         {/* Content */}
-        <div className="lg:col-span-3 bg-white rounded-2xl border border-gray-100 card-shadow-md p-6">
+        <div className="lg:col-span-3 bg-surface rounded-2xl border border-rule card-shadow-md p-6">
           {activeSection === "profile" && (
             <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-poppins)" }}>
-                Profile Information
+              <h2 className="text-lg font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-display)" }}>
+                Profile information
               </h2>
 
               {/* Avatar */}
               <div className="flex items-center gap-5 mb-8">
-                <div className="w-20 h-20 gradient-primary rounded-2xl flex items-center justify-center text-white text-2xl font-bold">
+                <div className="w-20 h-20 bg-fixed-ink rounded-2xl flex items-center justify-center text-white text-2xl font-bold">
                   {session?.user?.name?.[0]?.toUpperCase() || "U"}
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900">{session?.user?.name}</p>
-                  <p className="text-gray-500 text-sm">{session?.user?.email}</p>
+                  <p className="text-graphite text-sm">{session?.user?.email}</p>
                   <button className="text-blue-600 text-xs font-medium mt-1.5 hover:underline">
                     Change photo
                   </button>
                 </div>
               </div>
 
+              {profileError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm mb-6">
+                  {profileError}
+                </div>
+              )}
+
               <div className="grid sm:grid-cols-2 gap-5">
-                {[
-                  { label: "Full Name", value: session?.user?.name || "", id: "settings-name" },
-                  { label: "Email Address", value: session?.user?.email || "", id: "settings-email" },
-                  { label: "Role", value: "Student", id: "settings-role" },
-                  { label: "Institution", value: "N/A", id: "settings-institution" },
-                ].map((field) => (
-                  <div key={field.id}>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {field.label}
-                    </label>
-                    <input
-                      id={field.id}
-                      type="text"
-                      defaultValue={field.value}
-                      className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
-                    />
-                  </div>
-                ))}
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1.5">
+                    Full name
+                  </label>
+                  <input
+                    id="settings-name"
+                    type="text"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1.5">
+                    Email address
+                  </label>
+                  <input
+                    id="settings-email"
+                    type="email"
+                    value={profileEmail}
+                    onChange={(e) => setProfileEmail(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1.5">
+                    Role
+                  </label>
+                  <input
+                    id="settings-role"
+                    type="text"
+                    disabled
+                    value={session?.user && (session.user as { role?: string }).role ? (session.user as { role?: string }).role : "STUDENT"}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm bg-gray-50 text-graphite cursor-not-allowed outline-none"
+                  />
+                </div>
+
               </div>
 
               <div className="mt-6 flex items-center gap-3">
                 <button
                   id="save-settings"
                   onClick={handleSave}
-                  className="gradient-primary text-white font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm"
+                  disabled={profileLoading}
+                  className="bg-ink text-paper font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm flex items-center gap-2 disabled:opacity-60"
                 >
-                  {saved ? "✓ Saved!" : "Save Changes"}
+                  {profileLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : saved ? (
+                    "✓ Saved!"
+                  ) : (
+                    "Save changes"
+                  )}
                 </button>
-                <button className="border border-gray-200 text-gray-600 font-medium px-6 py-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm">
+                <button 
+                  onClick={() => {
+                    if (session?.user) {
+                      setProfileName(session.user.name || "");
+                      setProfileEmail(session.user.email || "");
+                    }
+                    setProfileError("");
+                  }}
+                  className="border border-gray-200 text-graphite font-medium px-6 py-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm"
+                >
                   Cancel
                 </button>
               </div>
             </div>
           )}
 
-          {activeSection === "subscription" && (
-            <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-6" style={{ fontFamily: "var(--font-poppins)" }}>
-                Subscription & Credits
-              </h2>
-
-              <div className="bg-gradient-to-r from-blue-600 to-teal-500 rounded-2xl p-6 text-white mb-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-blue-100 text-sm font-medium mb-1">Current Plan</p>
-                    <p className="text-3xl font-bold" style={{ fontFamily: "var(--font-poppins)" }}>
-                      FREE
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-blue-100 text-sm">Credits Used</p>
-                    <p className="text-2xl font-bold">0/10</p>
-                  </div>
-                </div>
-                <div className="mt-4 h-2 bg-white/20 rounded-full overflow-hidden">
-                  <div className="h-full w-0 bg-white rounded-full" />
-                </div>
-                <p className="text-blue-100 text-xs mt-2">10 evaluations remaining</p>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-4">
-                {[
-                  { name: "Pro", price: "₹299/mo", features: "100 evaluations + Advanced analytics", color: "bg-blue-50 border-blue-200" },
-                  { name: "Premium", price: "₹4,999/mo", features: "Unlimited + Batch processing + API", color: "bg-purple-50 border-purple-200" },
-                ].map((plan) => (
-                  <div key={plan.name} className={`rounded-2xl border-2 ${plan.color} p-5`}>
-                    <p className="font-bold text-gray-900 text-lg mb-1">{plan.name}</p>
-                    <p className="text-blue-700 font-semibold text-xl mb-2">{plan.price}</p>
-                    <p className="text-gray-600 text-xs mb-4">{plan.features}</p>
-                    <button className="w-full gradient-primary text-white text-sm font-semibold py-2 rounded-xl hover:opacity-90 transition-opacity">
-                      Upgrade
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {activeSection === "appearance" && (
             <div>
-              <h2 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-poppins)" }}>
+              <h2 className="text-lg font-bold text-gray-900 mb-2">
                 Appearance & Theme
               </h2>
-              <p className="text-gray-500 text-xs mb-6">
-                Choose a visual theme that suits your style and workspace needs.
+              <p className="text-graphite text-xs mb-6">
+                Choose light or dark mode for your workspace.
               </p>
 
               <div className="grid sm:grid-cols-2 gap-4">
                 {[
                   {
                     id: "default" as const,
-                    name: "Classic Blue (Default)",
-                    description: "Standard light theme with blue and teal highlights.",
-                    previewBg: "bg-[#f8fafc]",
-                    previewColors: ["bg-[#2563eb]", "bg-[#14b8a6]"],
+                    name: "Light",
+                    description: "Paper background, ink text, examiner-red accent.",
+                    swatchClass: "bg-paper",
                   },
                   {
                     id: "dark" as const,
-                    name: "Slate Dark",
-                    description: "Relaxing dark layout with purple and pink accents.",
-                    previewBg: "bg-[#0f172a]",
-                    previewColors: ["bg-[#8b5cf6]", "bg-[#ec4899]"],
-                  },
-                  {
-                    id: "emerald" as const,
-                    name: "Emerald Forest",
-                    description: "Crisp green theme with deep blue accents.",
-                    previewBg: "bg-[#f9fafb]",
-                    previewColors: ["bg-[#059669]", "bg-[#2563eb]"],
-                  },
-                  {
-                    id: "sunset" as const,
-                    name: "Sunset Glow",
-                    description: "Warm layout with orange and magenta highlights.",
-                    previewBg: "bg-[#fafafa]",
-                    previewColors: ["bg-[#f97316]", "bg-[#db2777]"],
+                    name: "Dark",
+                    description: "Graphite ground, paper-toned text, same examiner-red accent.",
+                    swatchClass: "theme-dark bg-paper",
                   },
                 ].map((t) => {
                   const isActive = theme === t.id;
@@ -203,25 +379,25 @@ export default function SettingsPage() {
                       onClick={() => setTheme(t.id)}
                       className={`flex flex-col text-left p-5 rounded-2xl border-2 transition-all hover:scale-[1.01] ${
                         isActive
-                          ? "border-blue-600 bg-blue-50/20"
-                          : "border-gray-100 hover:border-gray-200 bg-white"
+                          ? "border-ink bg-ink/5"
+                          : "border-rule hover:border-gray-200 bg-surface"
                       }`}
                     >
                       {/* Preview Box */}
-                      <div className={`w-full h-24 rounded-xl ${t.previewBg} border border-gray-150 p-3 mb-4 flex items-center justify-between shadow-inner`}>
+                      <div className={`w-full h-24 rounded-xl ${t.swatchClass} border border-rule p-3 mb-4 flex items-center justify-between shadow-inner`}>
                         <div className="space-y-1.5 flex-1">
-                          <div className={`h-2.5 w-16 rounded-full opacity-60 ${t.id === "dark" ? "bg-slate-700" : "bg-gray-200"}`} />
-                          <div className={`h-2.5 w-24 rounded-full opacity-60 ${t.id === "dark" ? "bg-slate-700" : "bg-gray-200"}`} />
+                          <div className="h-2.5 w-16 rounded-full opacity-60 bg-rule" />
+                          <div className="h-2.5 w-24 rounded-full opacity-60 bg-rule" />
                         </div>
                         <div className="flex gap-1.5">
-                          {t.previewColors.map((colorClass, idx) => (
-                            <div key={idx} className={`w-6 h-6 rounded-full shadow ${colorClass}`} />
-                          ))}
+                          <div className="w-6 h-6 rounded-full shadow bg-fixed-ink" />
+                          <div className="w-6 h-6 rounded-full shadow bg-examiner" />
+                          <div className="w-6 h-6 rounded-full shadow bg-tick" />
                         </div>
                       </div>
 
                       <p className="font-bold text-gray-900 text-sm mb-1">{t.name}</p>
-                      <p className="text-gray-500 text-xs">{t.description}</p>
+                      <p className="text-graphite text-xs">{t.description}</p>
                     </button>
                   );
                 })}
@@ -229,17 +405,216 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {activeSection !== "profile" && activeSection !== "subscription" && activeSection !== "appearance" && (
-            <div className="text-center py-10">
-              <div className="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                {(() => {
-                  const sec = sections.find((s) => s.id === activeSection);
-                  const Icon = sec?.icon || User;
-                  return <Icon className="w-7 h-7 text-gray-400" />;
-                })()}
+          {activeSection === "notifications" && (
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-display)" }}>
+                Notification preferences
+              </h2>
+              <p className="text-graphite text-xs mb-6">
+                Choose how and when you receive system and performance updates.
+              </p>
+
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-ink text-sm uppercase tracking-wide">Email notifications</h3>
+                  <div className="space-y-3">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={evalEmail}
+                        onChange={(e) => setEvalEmail(e.target.checked)}
+                        className="w-4.5 h-4.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Evaluation completion</p>
+                        <p className="text-xs text-graphite">Notify me as soon as an uploaded answer sheet is graded.</p>
+                      </div>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={featureEmail}
+                        onChange={(e) => setFeatureEmail(e.target.checked)}
+                        className="w-4.5 h-4.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Feature updates</p>
+                        <p className="text-xs text-graphite">Keep me updated on newly supported built-in subjects and features.</p>
+                      </div>
+                    </label>
+                    <label className="flex items-center gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={weeklyEmail}
+                        onChange={(e) => setWeeklyEmail(e.target.checked)}
+                        className="w-4.5 h-4.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Weekly progress</p>
+                        <p className="text-xs text-graphite">Receive a weekly digest of evaluation accuracy and scores.</p>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-4 border-t border-rule space-y-4">
+                  <h3 className="font-semibold text-ink text-sm uppercase tracking-wide">Browser notifications</h3>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={pushNotif}
+                      onChange={(e) => setPushNotif(e.target.checked)}
+                      className="w-4.5 h-4.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Push notifications</p>
+                      <p className="text-xs text-graphite">Display real-time evaluation status alerts inside your browser window.</p>
+                    </div>
+                  </label>
+                </div>
               </div>
-              <p className="text-gray-500 font-medium capitalize">{activeSection} settings</p>
-              <p className="text-gray-400 text-sm mt-1">Coming soon — we&apos;re building this out!</p>
+
+              {notificationsError && (
+                <div className="mt-4 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
+                  {notificationsError}
+                </div>
+              )}
+
+              <div className="mt-8 flex items-center gap-3">
+                <button
+                  onClick={handleNotificationsSave}
+                  disabled={notificationsLoading}
+                  className="bg-ink text-paper font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm disabled:opacity-60"
+                >
+                  {notificationsLoading ? "Saving..." : notificationsSaved ? "✓ Preferences saved!" : "Save preferences"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {activeSection === "security" && (
+            <div>
+              <h2 className="text-lg font-bold text-gray-900 mb-2" style={{ fontFamily: "var(--font-display)" }}>
+                Security settings
+              </h2>
+              <p className="text-graphite text-xs mb-6">
+                Update your account password and configure security options.
+              </p>
+
+              {passwordError && (
+                <div className="mb-4 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
+                  {passwordError}
+                </div>
+              )}
+
+              {passwordSuccess && (
+                <div className="mb-4 p-3.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-sm font-medium">
+                  {passwordSuccess}
+                </div>
+              )}
+
+              <form onSubmit={handlePasswordChange} className="space-y-4 max-w-md">
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1.5">
+                    Current password
+                  </label>
+                  <input
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="••••••••"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1.5">
+                    New password
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="At least 6 characters"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-ink mb-1.5">
+                    Confirm new password
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                    placeholder="At least 6 characters"
+                  />
+                </div>
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    disabled={passwordLoading}
+                    className="bg-ink text-paper font-semibold px-6 py-2.5 rounded-xl hover:opacity-90 transition-opacity text-sm disabled:opacity-50"
+                  >
+                    {passwordLoading ? "Updating..." : "Update password"}
+                  </button>
+                </div>
+              </form>
+
+              <div className="mt-10 pt-8 border-t border-rule max-w-md">
+                <h3 className="text-sm font-bold text-red-700 mb-1 flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4" /> Danger zone
+                </h3>
+                <p className="text-graphite text-xs mb-4">
+                  Permanently deletes your account and all associated data (evaluations, reports, question papers,
+                  sessions). This cannot be undone.
+                </p>
+
+                {deleteError && (
+                  <div className="mb-4 p-3.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium">
+                    {deleteError}
+                  </div>
+                )}
+
+                {!deleteConfirming ? (
+                  <button
+                    onClick={() => setDeleteConfirming(true)}
+                    className="border border-red-200 text-red-700 font-semibold px-6 py-2.5 rounded-xl hover:bg-red-50 transition-colors text-sm"
+                  >
+                    Delete account
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-ink mb-1.5">
+                        Confirm your password
+                      </label>
+                      <input
+                        type="password"
+                        value={deletePassword}
+                        onChange={(e) => setDeletePassword(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all"
+                        placeholder="••••••••"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDeleteAccount}
+                        disabled={deleteLoading}
+                        className="bg-red-600 text-white font-semibold px-6 py-2.5 rounded-xl hover:bg-red-700 transition-colors text-sm disabled:opacity-50"
+                      >
+                        {deleteLoading ? "Deleting..." : "Permanently delete my account"}
+                      </button>
+                      <button
+                        onClick={() => { setDeleteConfirming(false); setDeleteError(""); setDeletePassword(""); }}
+                        className="border border-gray-200 text-graphite font-semibold px-6 py-2.5 rounded-xl hover:bg-gray-50 transition-colors text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

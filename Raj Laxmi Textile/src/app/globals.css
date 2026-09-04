@@ -1,0 +1,146 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@theme {
+  /* shadcn/Base UI semantic tokens, mapped onto the dye palette so the
+     primitives inherit this design system rather than a default grey one. */
+  --color-background: #fcfbf8;
+  --color-foreground: #1a1614;
+  --color-card: #fcfbf8;
+  --color-card-foreground: #1a1614;
+  --color-popover: #fcfbf8;
+  --color-popover-foreground: #1a1614;
+  --color-primary: #1e3a6b;
+  --color-primary-foreground: #fcfbf8;
+  --color-secondary: #f1ebdf;
+  --color-secondary-foreground: #14243f;
+  --color-muted: #f1ebdf;
+  --color-muted-foreground: #55504a;
+  --color-accent: #f1ebdf;
+  --color-accent-foreground: #14243f;
+  --color-destructive: #9e2b2b;
+  --color-destructive-foreground: #fcfbf8;
+  --color-border: #ddd4c4;
+  --color-input: #ddd4c4;
+  --color-ring: #e39a15;
+
+  /* Nothing is pill-shaped: every radius token collapses to the 2px edge. */
+  --radius: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius-2xl: 2px;
+  --radius-3xl: 2px;
+  --radius-full: 2px;
+
+  /* Dye palette — named for the actual dyes used in Jaipuri hand-block printing */
+  --color-ivory: #fcfbf8;
+  --color-indigo-900: #14243f;
+  --color-indigo-600: #1e3a6b;
+  --color-cobalt: #2f5aa8;
+  --color-marigold: #e39a15;
+  --color-madder: #9e2b2b;
+  --color-leaf: #3f6b39;
+  --color-ink: #1a1614;
+  --color-sand: #f1ebdf;
+
+  --font-display: var(--font-fraunces), Georgia, "Times New Roman", serif;
+  --font-sans: var(--font-public-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-deva: var(--font-tiro-deva), serif;
+
+  /* Scale: 14/16/18/22/28/36/48/64/88 */
+  --text-14: 0.875rem;
+  --text-14--line-height: 1.5;
+  --text-16: 1rem;
+  --text-16--line-height: 1.6;
+  --text-18: 1.125rem;
+  --text-18--line-height: 1.6;
+  --text-22: 1.375rem;
+  --text-22--line-height: 1.5;
+  --text-28: 1.75rem;
+  --text-28--line-height: 1.3;
+  --text-36: 2.25rem;
+  --text-36--line-height: 1.2;
+  --text-48: 3rem;
+  --text-48--line-height: 1.1;
+  --text-64: 4rem;
+  --text-64--line-height: 1.05;
+  --text-88: 5.5rem;
+  --text-88--line-height: 1;
+
+  --radius-edge: 2px;
+
+  --container-site: 1280px;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-ivory);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-18);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Display type reads as inked, slightly irregular — like a hand-pulled screen. */
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-variation-settings: "SOFT" 60, "WONK" 1, "opsz" 120;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    text-align: left;
+    text-wrap: balance;
+  }
+
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  img,
+  svg,
+  video {
+    border-radius: 0;
+  }
+
+  ::selection {
+    background-color: var(--color-marigold);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-marigold);
+    outline-offset: 2px;
+  }
+}
+
+@utility measure {
+  max-width: 68ch;
+}
+
+/* Marigold is legible as a rule, an underline or a ring — never as text on ivory. */
+@utility rule-marigold {
+  border-bottom: 2px solid var(--color-marigold);
+}
+
+@utility display-wonk {
+  font-family: var(--font-display);
+  font-variation-settings: "SOFT" 60, "WONK" 1, "opsz" 120;
+}
+
+@utility deva {
+  font-family: var(--font-deva);
+  font-variation-settings: normal;
+}

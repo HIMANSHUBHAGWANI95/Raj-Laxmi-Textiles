@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { reportApiError } from "@/lib/apiError";
+import { checkRateLimit } from "@/lib/rateLimit";
+import { zodErrorResponse } from "@/lib/zodError";
 
 const signupSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -12,17 +15,31 @@ const signupSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    // Every account starts with its own free daily evaluation/paper-
+    // generation quota, so unrestricted signup is a direct quota bypass —
+    // script up throwaway accounts, each with a fresh 10/day. proxy.ts
+    // rate-limits /api/auth/:path* generally (10/min/IP), but that's sized
+    // for auth-attempt flooding, not quota abuse; this is a much stricter,
+    // signup-specific cap on top of it.
+    const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+    const isAllowed = await checkRateLimit(`signup:${ip}`, 5, 60 * 60 * 1000);
+    if (!isAllowed) {
+      return NextResponse.json(
+        { error: "Too many accounts created from this network. Please try again in an hour." },
+        { status: 429 }
+      );
+    }
+
     const body = await request.json();
     const parsed = signupSchema.safeParse(body);
 
     if (!parsed.success) {
-      return NextResponse.json(
-        { error: parsed.error.issues[0].message },
-        { status: 400 }
-      );
+      return zodErrorResponse(parsed.error);
     }
 
-    const { name, email, password, role } = parsed.data;
+    const { name, role } = parsed.data;
+    const email = parsed.data.email.trim().toLowerCase();
+    const password = parsed.data.password;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({
@@ -39,40 +56,23 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user and subscription in a transaction
-    const user = await prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
-        data: {
-          name,
-          email,
-          password: hashedPassword,
-          role,
-        },
-      });
-
-      await tx.subscription.create({
-        data: {
-          userId: newUser.id,
-          plan: "FREE",
-          credits: 10,
-        },
-      });
-
-      return newUser;
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+      },
     });
 
     return NextResponse.json(
       {
-        message: "Account created successfully",
+        message: "Account created successfully.",
         user: { id: user.id, email: user.email, name: user.name },
       },
       { status: 201 }
     );
   } catch (error) {
-    console.error("Signup error:", error);
-    return NextResponse.json(
-      { error: "Failed to create account. Please try again." },
-      { status: 500 }
-    );
+    return reportApiError({ code: "AUTH_REQUEST_FAILED", error, route: "POST /api/auth/signup" });
   }
 }

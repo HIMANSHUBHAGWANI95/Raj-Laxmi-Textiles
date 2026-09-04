@@ -29,12 +29,38 @@ interface SavedPaper {
   createdAt: string;
 }
 
-const DEMO_REPORTS = [
-  { id: "demo-1", subject: "Mathematics", grade: "12th Grade", percentage: 85, date: "June 25, 2024", status: "COMPLETED" },
-  { id: "demo-2", subject: "Physics", grade: "12th Grade", percentage: 72, date: "June 20, 2024", status: "COMPLETED" },
-  { id: "demo-3", subject: "Chemistry", grade: "12th Grade", percentage: 91, date: "June 15, 2024", status: "COMPLETED" },
-  { id: "demo-4", subject: "Biology", grade: "11th Grade", percentage: 68, date: "June 10, 2024", status: "COMPLETED" },
-];
+interface SavedReportWithEvaluation {
+  id: string;
+  userId: string;
+  evaluationId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  evaluation?: {
+    id: string;
+    userId: string;
+    examType: string;
+    subject: string;
+    grade: string | null;
+    totalMarks: number | null;
+    obtainedMarks: number | null;
+    percentage: number | null;
+    status: string;
+    originalFileName: string | null;
+    fileUrl: string | null;
+    fileType: string | null;
+    ocrText: string | null;
+    aiResponse: string | null;
+    marksBreakdown: string | null;
+    aiFeedback: string | null;
+    strengths: string | null;
+    weaknesses: string | null;
+    recommendations: string | null;
+    createdAt: string;
+    updatedAt: string;
+  };
+}
+
 
 export default function SavedReportsPage() {
   const [activeTab, setActiveTab] = useState<"reports" | "papers">("reports");
@@ -42,7 +68,7 @@ export default function SavedReportsPage() {
   const [loadingPapers, setLoadingPapers] = useState(false);
 
   // Real saved reports state
-  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [savedReports, setSavedReports] = useState<SavedReportWithEvaluation[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
   
   // Modal Previewer State
@@ -240,27 +266,27 @@ export default function SavedReportsPage() {
       {/* Page Header */}
       <div className="flex items-center justify-between no-print">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "var(--font-poppins)" }}>
-            Saved Repository
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: "var(--font-display)" }}>
+            Saved repository
           </h1>
-          <p className="text-gray-500 text-sm">All your evaluations and generated assets in one place</p>
+          <p className="text-graphite text-sm">All your evaluations and generated assets in one place</p>
         </div>
         
         {activeTab === "reports" ? (
           <Link
             href="/upload"
-            className="inline-flex items-center gap-2 gradient-primary text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-2 bg-ink text-paper text-sm font-semibold px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity"
           >
             <PlusCircle className="w-4 h-4" />
-            New Evaluation
+            New evaluation
           </Link>
         ) : (
           <Link
             href="/generate-paper"
-            className="inline-flex items-center gap-2 gradient-primary text-white text-sm font-semibold px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity"
+            className="inline-flex items-center gap-2 bg-ink text-paper text-sm font-semibold px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity"
           >
             <PlusCircle className="w-4 h-4" />
-            Generate Paper
+            Generate paper
           </Link>
         )}
       </div>
@@ -272,20 +298,20 @@ export default function SavedReportsPage() {
           className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
             activeTab === "reports"
               ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-900"
+              : "border-transparent text-graphite hover:text-ink"
           }`}
         >
-          Evaluation Reports
+          Evaluation reports
         </button>
         <button
           onClick={() => setActiveTab("papers")}
           className={`px-5 py-3 text-sm font-semibold border-b-2 transition-all ${
             activeTab === "papers"
               ? "border-blue-600 text-blue-600"
-              : "border-transparent text-gray-500 hover:text-gray-900"
+              : "border-transparent text-graphite hover:text-ink"
           }`}
         >
-          Generated Papers
+          Generated papers
         </button>
       </div>
 
@@ -293,71 +319,27 @@ export default function SavedReportsPage() {
       {activeTab === "reports" ? (
         <div className="no-print">
           {loadingReports ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex flex-col items-center justify-center gap-3 py-12">
               <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+              <p className="text-sm text-graphite">Loading your saved reports...</p>
             </div>
           ) : savedReports.length === 0 ? (
-            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {DEMO_REPORTS.map((report) => (
-                <div
-                  key={report.id}
-                  className="bg-white rounded-2xl border border-gray-100 card-shadow-md p-5 hover:card-shadow-lg hover:-translate-y-0.5 transition-all group"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center text-white font-bold text-sm">
-                      {report.subject.slice(0, 2).toUpperCase()}
-                    </div>
-                    <span
-                      className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
-                        report.percentage >= 80
-                          ? "bg-green-100 text-green-700"
-                          : report.percentage >= 60
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-red-100 text-red-700"
-                      }`}
-                    >
-                      {report.percentage}%
-                    </span>
-                  </div>
-
-                  <h3 className="font-bold text-gray-900 mb-0.5" style={{ fontFamily: "var(--font-poppins)" }}>
-                    {report.subject}
-                  </h3>
-                  <p className="text-gray-500 text-xs mb-4">{report.grade} • {report.date}</p>
-
-                  <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-4">
-                    <div
-                      className="h-full rounded-full"
-                      style={{
-                        width: `${report.percentage}%`,
-                        background: report.percentage >= 80 ? "#22C55E" : report.percentage >= 60 ? "#F59E0B" : "#EF4444",
-                      }}
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-400">
-                      <BookMarked className="w-3.5 h-3.5" />
-                      <span>Saved Report (Demo)</span>
-                    </div>
-                    <Link
-                      href={`/evaluation/demo`}
-                      className="inline-flex items-center gap-1.5 text-blue-600 text-xs font-semibold opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      View <ExternalLink className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                </div>
-              ))}
-
-              {/* Empty state card */}
-              <div className="bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 p-5 flex flex-col items-center justify-center text-center min-h-48">
-                <FileText className="w-8 h-8 text-gray-300 mb-3" />
-                <p className="text-gray-500 text-sm font-medium">Save reports after evaluation</p>
-                <Link href="/upload" className="text-blue-600 text-xs font-medium mt-2 hover:underline">
-                  Start new evaluation →
-                </Link>
+            <div className="bg-surface rounded-3xl border border-rule p-12 text-center max-w-lg mx-auto shadow-sm">
+              <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                <BookMarked className="w-8 h-8 text-blue-600" />
               </div>
+              <h3 className="text-lg font-bold text-gray-900 mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                No saved reports yet
+              </h3>
+              <p className="text-graphite text-sm max-w-xs mx-auto mb-6">
+                When you evaluate an exam answer sheet, you can save the results here to build your academic repository.
+              </p>
+              <Link
+                href="/upload"
+                className="inline-flex items-center gap-2 bg-ink text-paper font-semibold px-6 py-3 rounded-xl hover:opacity-90 transition-opacity text-sm shadow-md"
+              >
+                <FileText className="w-4 h-4" /> Start first evaluation
+              </Link>
             </div>
           ) : (
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -373,7 +355,7 @@ export default function SavedReportsPage() {
                 return (
                   <div
                     key={saved.id}
-                    className="bg-white rounded-2xl border border-gray-100 card-shadow-md p-5 hover:card-shadow-lg hover:-translate-y-0.5 transition-all group relative"
+                    className="bg-surface rounded-2xl border border-rule card-shadow-md p-5 hover:card-shadow-lg hover:-translate-y-0.5 transition-all group relative"
                   >
                     <button
                       onClick={async (e) => {
@@ -388,17 +370,17 @@ export default function SavedReportsPage() {
                         fetchSavedReports();
                       }}
                       className="absolute top-4 right-4 text-gray-300 hover:text-red-500 p-1.5 rounded-xl hover:bg-gray-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                      title="Unsave Report"
+                      title="Unsave report"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
 
                     <div className="flex items-start justify-between mb-4">
-                      <div className="w-12 h-12 gradient-primary rounded-xl flex items-center justify-center text-white font-bold text-sm">
+                      <div className="w-12 h-12 bg-fixed-ink rounded-xl flex items-center justify-center text-white font-bold text-sm">
                         {report.subject.slice(0, 2).toUpperCase()}
                       </div>
                       <span
-                        className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
+                        className={`text-xs px-2.5 py-1 rounded-full font-semibold font-mono ${
                           pct >= 80
                             ? "bg-green-100 text-green-700"
                             : pct >= 60
@@ -410,17 +392,17 @@ export default function SavedReportsPage() {
                       </span>
                     </div>
 
-                    <h3 className="font-bold text-gray-900 mb-0.5" style={{ fontFamily: "var(--font-poppins)" }}>
+                    <h3 className="font-bold text-gray-900 mb-0.5" style={{ fontFamily: "var(--font-display)" }}>
                       {report.subject}
                     </h3>
-                    <p className="text-gray-500 text-xs mb-4">{report.grade} • {formattedDate}</p>
+                    <p className="text-graphite text-xs mb-4">{report.grade} • {formattedDate}</p>
 
-                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden mb-4">
+                    <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden mb-4">
                       <div
                         className="h-full rounded-full"
                         style={{
                           width: `${pct}%`,
-                          background: pct >= 80 ? "#22C55E" : pct >= 60 ? "#F59E0B" : "#EF4444",
+                          background: pct >= 80 ? "var(--tick)" : pct >= 60 ? "var(--examiner)" : "var(--examiner)",
                         }}
                       />
                     </div>
@@ -428,7 +410,7 @@ export default function SavedReportsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-xs text-gray-400">
                         <BookMarked className="w-3.5 h-3.5 text-blue-500" />
-                        <span className="text-blue-600 font-semibold">Saved Report</span>
+                        <span className="text-blue-600 font-semibold">Saved report</span>
                       </div>
                       <Link
                         href={`/evaluation/${report.id}`}
@@ -447,23 +429,24 @@ export default function SavedReportsPage() {
         // Question Papers tab view
         <div className="no-print">
           {loadingPapers ? (
-            <div className="flex items-center justify-center py-12">
+            <div className="flex flex-col items-center justify-center gap-3 py-12">
               <Loader2 className="w-10 h-10 animate-spin text-blue-500" />
+              <p className="text-sm text-graphite">Loading your question papers...</p>
             </div>
           ) : papers.length === 0 ? (
-            <div className="text-center py-16 bg-white border border-gray-100 rounded-2xl max-w-lg mx-auto">
+            <div className="text-center py-16 bg-surface border border-rule rounded-2xl max-w-lg mx-auto">
               <GraduationCap className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-              <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: "var(--font-poppins)" }}>
+              <h3 className="text-lg font-bold text-gray-900" style={{ fontFamily: "var(--font-display)" }}>
                 No saved question papers
               </h3>
-              <p className="text-gray-500 text-sm mt-1 max-w-xs mx-auto">
+              <p className="text-graphite text-sm mt-1 max-w-xs mx-auto">
                 Generate tailored question papers with automated planning and reviewer agents.
               </p>
               <Link
                 href="/generate-paper"
-                className="inline-flex items-center gap-2 gradient-primary text-white text-sm font-semibold px-5 py-2.5 rounded-xl mt-6 hover:opacity-90 shadow-md"
+                className="inline-flex items-center gap-2 bg-ink text-paper text-sm font-semibold px-5 py-2.5 rounded-xl mt-6 hover:opacity-90 shadow-md"
               >
-                <PlusCircle className="w-4 h-4" /> Generate First Paper
+                <PlusCircle className="w-4 h-4" /> Generate first paper
               </Link>
             </div>
           ) : (
@@ -472,12 +455,12 @@ export default function SavedReportsPage() {
                 <div
                   key={p.id}
                   onClick={() => handleOpenPaper(p)}
-                  className="bg-white rounded-2xl border border-gray-100 card-shadow-md p-5 hover:card-shadow-lg hover:-translate-y-0.5 transition-all group cursor-pointer relative"
+                  className="bg-surface rounded-2xl border border-rule card-shadow-md p-5 hover:card-shadow-lg hover:-translate-y-0.5 transition-all group cursor-pointer relative"
                 >
                   <button
                     onClick={(e) => handleDeletePaper(p.id, e)}
                     className="absolute top-4 right-4 text-gray-300 hover:text-red-500 p-1.5 rounded-xl hover:bg-gray-50 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete Paper"
+                    title="Delete paper"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -489,30 +472,30 @@ export default function SavedReportsPage() {
                     <span
                       className={`text-xs px-2.5 py-1 rounded-full font-semibold ${
                         p.difficulty === "Easy"
-                          ? "bg-green-50 text-green-700 border border-green-150"
+                          ? "bg-green-50 text-green-700 border border-green-100"
                           : p.difficulty === "Medium"
-                          ? "bg-amber-50 text-amber-700 border border-amber-150"
-                          : "bg-red-50 text-red-700 border border-red-150"
+                          ? "bg-amber-50 text-amber-700 border border-amber-100"
+                          : "bg-red-50 text-red-700 border border-red-100"
                       }`}
                     >
                       {p.difficulty}
                     </span>
                   </div>
 
-                  <h3 className="font-bold text-gray-900 mb-0.5 text-sm truncate pr-6" style={{ fontFamily: "var(--font-poppins)" }}>
+                  <h3 className="font-bold text-gray-900 mb-0.5 text-sm truncate pr-6" style={{ fontFamily: "var(--font-display)" }}>
                     {p.title}
                   </h3>
-                  <p className="text-gray-500 text-xs mb-4">
+                  <p className="text-graphite text-xs mb-4">
                     {p.grade} • {p.totalMarks} Marks
                   </p>
 
                   <div className="flex items-center justify-between border-t border-gray-50 pt-4 mt-2">
                     <div className="flex items-center gap-1.5 text-xs text-gray-400">
                       <GraduationCap className="w-4 h-4 text-gray-400" />
-                      <span>Exam Paper</span>
+                      <span>Exam paper</span>
                     </div>
                     <span className="inline-flex items-center gap-1.5 text-blue-600 text-xs font-semibold">
-                      View Paper <Eye className="w-3.5 h-3.5" />
+                      View paper <Eye className="w-3.5 h-3.5" />
                     </span>
                   </div>
                 </div>
@@ -525,43 +508,43 @@ export default function SavedReportsPage() {
       {/* Full Screen Previewer Modal */}
       {selectedPaper && parsedPaperContent && (
         <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4 bg-black/55 modal-backdrop">
-          <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col modal-container">
+          <div className="bg-surface rounded-3xl w-full max-w-4xl max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col modal-container">
             {/* Modal Toolbar Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-gray-50 no-print flex-shrink-0">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-rule bg-gray-50 no-print flex-shrink-0">
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPreviewMode("paper")}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                     previewMode === "paper"
                       ? "bg-blue-50 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-100"
+                      : "text-graphite hover:bg-surface-2"
                   }`}
                 >
-                  <FileText className="w-3.5 h-3.5" /> Question Paper
+                  <FileText className="w-3.5 h-3.5" /> Question paper
                 </button>
                 <button
                   onClick={() => setPreviewMode("answers")}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                     previewMode === "answers"
                       ? "bg-blue-50 text-blue-700"
-                      : "text-gray-600 hover:bg-gray-100"
+                      : "text-graphite hover:bg-surface-2"
                   }`}
                 >
-                  <Eye className="w-3.5 h-3.5" /> Answer Key
+                  <Eye className="w-3.5 h-3.5" /> Answer key
                 </button>
               </div>
 
               <div className="flex items-center gap-2">
                 <button
                   onClick={handleCopy}
-                  className="flex items-center gap-1 border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-gray-700 hover:bg-gray-100"
+                  className="flex items-center gap-1 border border-gray-200 px-3 py-1.5 rounded-xl text-xs font-bold bg-surface text-ink hover:bg-surface-2"
                 >
                   {copied ? <CheckCircle className="w-3.5 h-3.5 text-green-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  {copied ? "Copied!" : "Copy Text"}
+                  {copied ? "Copied!" : "Copy text"}
                 </button>
                 <button
                   onClick={handlePrint}
-                  className="flex items-center gap-1 gradient-primary text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow hover:opacity-95"
+                  className="flex items-center gap-1 bg-ink text-paper px-3 py-1.5 rounded-xl text-xs font-bold shadow hover:opacity-95"
                 >
                   <Printer className="w-3.5 h-3.5" /> Print / PDF
                 </button>
@@ -570,7 +553,7 @@ export default function SavedReportsPage() {
                     setSelectedPaper(null);
                     setParsedPaperContent(null);
                   }}
-                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-xl hover:bg-gray-100"
+                  className="p-1.5 text-gray-400 hover:text-graphite rounded-xl hover:bg-surface-2"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -584,7 +567,7 @@ export default function SavedReportsPage() {
                 <h1 className="text-2xl font-bold uppercase tracking-wider text-gray-900" style={{ fontFamily: "serif" }}>
                   {parsedPaperContent.metadata?.institutionName || "UNIVERSITY EXAMINATION BOARD"}
                 </h1>
-                <h2 className="text-sm font-bold tracking-wide text-gray-600 uppercase mt-1">
+                <h2 className="text-sm font-bold tracking-wide text-graphite uppercase mt-1">
                   Term End Examination • {parsedPaperContent.paper.subject}
                 </h2>
               </div>
@@ -618,8 +601,8 @@ export default function SavedReportsPage() {
               {/* Instructions */}
               {parsedPaperContent.metadata?.instructions && (
                 <div className="bg-gray-50 border border-gray-200 p-4 rounded-xl mb-8 text-xs italic text-left">
-                  <strong className="block text-gray-700 not-italic uppercase tracking-wider mb-1">General Instructions:</strong>
-                  <div className="whitespace-pre-line text-gray-600">{parsedPaperContent.metadata.instructions}</div>
+                  <strong className="block text-ink not-italic uppercase tracking-wider mb-1">General Instructions:</strong>
+                  <div className="whitespace-pre-line text-graphite">{parsedPaperContent.metadata.instructions}</div>
                 </div>
               )}
 
@@ -629,7 +612,7 @@ export default function SavedReportsPage() {
                   <div key={sIdx} className="space-y-4">
                     <div className="border-b border-gray-300 pb-2">
                       <h2 className="text-base font-bold uppercase tracking-wide text-gray-900">{section.title}</h2>
-                      <p className="text-gray-500 text-xs mt-0.5 italic">{section.description}</p>
+                      <p className="text-graphite text-xs mt-0.5 italic">{section.description}</p>
                     </div>
 
                     <div className="space-y-6">
@@ -640,7 +623,7 @@ export default function SavedReportsPage() {
                               <span className="font-bold mr-1.5">Q{q.number}.</span>
                               {q.question}
                             </p>
-                            <span className="text-xs font-bold text-gray-500 whitespace-nowrap">
+                            <span className="text-xs font-bold text-graphite whitespace-nowrap">
                               [{q.marks} Mark{q.marks > 1 ? "s" : ""}]
                             </span>
                           </div>
@@ -648,8 +631,8 @@ export default function SavedReportsPage() {
                           {q.options && q.options.length > 0 && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-3 pl-6">
                               {q.options.map((opt, oIdx) => (
-                                <p key={oIdx} className="text-sm text-gray-700">
-                                  <span className="font-semibold text-gray-500 mr-2">
+                                <p key={oIdx} className="text-sm text-ink">
+                                  <span className="font-semibold text-graphite mr-2">
                                     {String.fromCharCode(65 + oIdx)}.
                                   </span>
                                   {opt}

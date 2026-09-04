@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(_req: NextRequest) {
+export async function GET() {
   try {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
@@ -18,11 +18,15 @@ export async function GET(_req: NextRequest) {
       take: 20,
     });
 
-    // Calculate analytics
-    const completed = evaluations.filter((e) => e.status === "COMPLETED");
+    // Calculate analytics. The modelId check is defense in depth against the
+    // exact shape of stale row this database had until it was purged: status
+    // "SUCCEEDED" but modelId null, left by a client-side mock deleted from
+    // source months ago — evaluationWorker.ts always sets both together for
+    // a real grading call, so a SUCCEEDED row without one is untrustworthy.
+    const completed = evaluations.filter((e) => e.status === "SUCCEEDED" && e.modelId);
     const avgPercentage =
       completed.length > 0
-        ? completed.reduce((sum, e) => sum + (e.percentage || 0), 0) / completed.length
+        ? completed.reduce((sum: number, e) => sum + (e.percentage || 0), 0) / completed.length
         : 0;
 
     // Group by month for trend data
@@ -40,9 +44,9 @@ export async function GET(_req: NextRequest) {
       const avgScore =
         monthEvals.length > 0
           ? Math.round(
-              monthEvals.reduce((sum, e) => sum + (e.percentage || 0), 0) /
-                monthEvals.length
-            )
+            monthEvals.reduce((sum: number, e) => sum + (e.percentage || 0), 0) /
+            monthEvals.length
+          )
           : 0;
       return { month, score: avgScore, count: monthEvals.length };
     });
@@ -67,10 +71,15 @@ export async function GET(_req: NextRequest) {
       })
     );
 
+    const savedReportsCount = await prisma.savedReport.count({
+      where: { userId },
+    });
+
     return NextResponse.json({
       totalEvaluations: evaluations.length,
       completedEvaluations: completed.length,
       avgPercentage: Math.round(avgPercentage),
+      savedReportsCount,
       monthlyTrend: monthlyData,
       subjectPerformance,
       recentEvaluations: evaluations.slice(0, 5).map((e) => ({

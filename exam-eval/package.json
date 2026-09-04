@@ -4,27 +4,41 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3005",
-    "build": "next build",
-    "start": "next start -p 3005",
-    "lint": "eslint"
+    "build": "prisma generate && prisma migrate deploy && next build",
+    "start": "next start",
+    "postinstall": "prisma generate",
+    "lint": "eslint",
+    "test": "vitest run",
+    "accuracy": "tsx scripts/accuracy-harness.ts",
+    "accuracy:baseline": "tsx scripts/accuracy-harness.ts --update-baseline",
+    "fixtures": "tsx scripts/run-fixtures.ts",
+    "fixtures:live": "tsx scripts/run-fixtures.ts --live-fixtures",
+    "fixtures:generate": "tsx scripts/generate-fixtures.ts"
   },
   "dependencies": {
+    "@auth/prisma-adapter": "^2.11.2",
     "@google/generative-ai": "^0.24.1",
-    "@libsql/client": "^0.17.4",
-    "@prisma/adapter-libsql": "^7.8.0",
-    "@prisma/client": "^7.8.0",
+    "@prisma/client": "6.19.3",
+    "@prisma/extension-accelerate": "^3.0.1",
+    "@sentry/nextjs": "^10.69.0",
+    "@vercel/blob": "^2.6.1",
+    "@vercel/kv": "^3.0.0",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "dotenv": "^17.4.2",
     "framer-motion": "^12.41.0",
     "lucide-react": "^1.21.0",
-    "next": "16.2.9",
+    "next": "16.3.1",
     "next-auth": "^4.24.14",
-    "prisma": "^7.8.0",
+    "pdf-lib": "^1.17.1",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-dropzone": "^15.0.0",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.9.0",
+    "remark-gfm": "^4.0.1",
+    "resend": "^6.17.2",
     "tailwind-merge": "^3.6.0",
     "zod": "^4.4.3"
   },
@@ -37,11 +51,10 @@
     "@types/react-dropzone": "^4.2.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
+    "prisma": "6.19.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
-  },
-  "allowScripts": {
-    "@prisma/engines@7.8.0": true,
-    "prisma@7.8.0": true
+    "tsx": "^4.23.5",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

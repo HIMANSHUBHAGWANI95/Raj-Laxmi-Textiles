@@ -2,28 +2,44 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// DATABASE_URL: at runtime this should be a Prisma Accelerate connection
+// string (prisma://...) so queries go over HTTPS through Accelerate's pool
+// instead of each serverless invocation holding its own TCP connection to
+// Aiven. DIRECT_DATABASE_URL is the real mysql:// connection string, used
+// only for schema migrations/`db push` — Accelerate doesn't proxy those.
 datasource db {
-  provider = "sqlite"
+  provider  = "mysql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 model User {
-  id        String   @id @default(cuid())
-  email     String   @unique
-  name      String
-  password  String?
-  googleId  String?  @unique
-  role      String   @default("STUDENT")
-  avatar    String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id            String    @id @default(cuid())
+  email         String    @unique
+  emailVerified DateTime?
+  name          String
+  password      String?
+  googleId      String?   @unique
+  role          String    @default("STUDENT")
+  avatar        String?
+  suspended     Boolean   @default(false)
+  notificationPreferences String? @db.Text // JSON: { evaluationCompletion, featureUpdates, weeklyProgress, pushNotifications }
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
-  evaluations   Evaluation[]
-  savedReports  SavedReport[]
-  feedbacks     Feedback[]
-  subscription  Subscription?
-  accounts      Account[]
-  sessions      Session[]
+  evaluations    Evaluation[]
+  savedReports   SavedReport[]
+  feedbacks      Feedback[]
+  accounts       Account[]
+  sessions       Session[]
   questionPapers QuestionPaper[]
+  paperGenerationJobs PaperGenerationJob[]
+  tutorConversations TutorConversation[]
+  supportTickets SupportTicket[]
+  assignedTickets SupportTicket[] @relation("AssignedTickets")
+  ticketNotes     TicketNote[]
+  ticketReplies   TicketReply[]
+  usageCounters   UsageCounter[]
 }
 
 model Account {
@@ -32,12 +48,12 @@ model Account {
   type              String
   provider          String
   providerAccountId String
-  refresh_token     String?
-  access_token      String?
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
   expires_at        Int?
   token_type        String?
   scope             String?
-  id_token          String?
+  id_token          String? @db.Text
   session_state     String?
   user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -57,43 +73,146 @@ model VerificationToken {
   token      String   @unique
   expires    DateTime
 
-  @@unique([identifier, token])
+  @@id([identifier, token])
 }
 
-model Evaluation {
-  id               String   @id @default(cuid())
-  userId           String
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expires   DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
 
-  examType         String   @default("MCQ")
-  subject          String
-  grade            String?
-  totalMarks       Int?
-  obtainedMarks    Float?
-  percentage       Float?
-  status           String   @default("IN_PROGRESS")
+  @@index([email])
+  @@index([token])
+}
+
+model RateLimit {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  count     Int      @default(1)
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([key])
+  @@index([resetAt])
+}
+
+// Evaluation doubles as the job row for the async evaluation pipeline.
+// status is the job-state machine: QUEUED -> PROCESSING -> SUCCEEDED
+// (or -> FAILED after maxAttempts exhausted, or -> CANCELLED by the user).
+model Evaluation {
+  id            String  @id @default(cuid())
+  userId        String
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  examType      String  @default("MCQ")
+  subject       String
+  grade         String?
+  totalMarks    Int?
+  obtainedMarks Float?
+  percentage    Float?
+
+  // --- Job lifecycle ---
+  status        String    @default("QUEUED") // QUEUED | PROCESSING | SUCCEEDED | FAILED | CANCELLED
+  attempts      Int       @default(0)
+  maxAttempts   Int       @default(3)
+  lastError     String?   @db.Text
+  queuedAt      DateTime  @default(now())
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  nextAttemptAt DateTime?
+
+  // Gemini's grading call is not deterministic even at temperature 0 (no
+  // seed parameter exists on this API — confirmed live, see GradingCache
+  // below) — measured directly on a real fixture: an unambiguous, clear-cut
+  // error scored 2/5 in 3 of 4 identical live samples and 1/5 in the 4th.
+  // Rather than let the SAME uploaded file silently return a different
+  // grade depending on when it's (re-)evaluated, a SUCCEEDED job whose
+  // content hash already has a GradingCache entry reuses that stored result
+  // instead of re-grading — see evaluationWorker.ts. gradedFromCache records
+  // which happened, so the UI can disclose it rather than hide it.
+  gradedFromCache    Boolean @default(false)
+  // Set by PATCH .../regrade (an explicit, user-initiated action, never
+  // automatic) to force a fresh live grading call for this run even though a
+  // cache entry exists — and to overwrite that entry with the fresh result
+  // afterward. This is the only sanctioned way to get a different grade for
+  // an unchanged file: never by silently re-running until a "better" score
+  // appears.
+  bypassGradingCache Boolean @default(false)
+
+  // --- Audit trail: every SUCCEEDED row must be traceable to exactly
+  // what produced it. Without these, "why did this student get 3/5" is
+  // unanswerable six months later, and a prompt/rubric change can't be
+  // told apart from noise. ---
+  modelId          String?  // e.g. "gemini-2.0-flash"
+  promptVersion    String?  // sha256 (truncated) of the exact prompt templates used
+  rubricVersion    String?  // e.g. "rubric-2026-01-v1" — bumped whenever the rubric text changes
+  rawModelResponse String?  @db.LongText // the model's raw response, before parsing/validation
+
+  // Token usage for this evaluation's model calls (transcription + grading
+  // combined), captured from Gemini's usageMetadata. This is the basis for
+  // the daily spend estimate and kill-switch in lib/spendControl.ts.
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
 
   originalFileName String?
-  fileUrl          String?
+  fileUrl          String?  // public blob URL, fetched by the worker
+  fileKey          String?  // blob pathname/key, for deletion
+  fileSize         Int?
+  pageCount        Int?
   fileType         String?
-  ocrText          String?
+  ocrText          String? @db.LongText
 
-  aiResponse       String?
-  marksBreakdown   String?
-  aiFeedback       String?
+  aiResponse       String? @db.LongText
+  marksBreakdown   String? @db.LongText
+  aiFeedback       String? @db.LongText
 
-  strengths        String?
-  weaknesses       String?
-  recommendations  String?
+  strengths        String? @db.LongText
+  weaknesses       String? @db.LongText
+  recommendations  String? @db.LongText
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  savedReports     SavedReport[]
-  feedbacks        Feedback[]
+  savedReports SavedReport[]
+  feedbacks    Feedback[]
+  tutorConversation TutorConversation?
 
   @@index([userId])
   @@index([status])
+  @@index([createdAt])
+  @@index([status, nextAttemptAt])
+}
+
+// Content-addressed store for a completed grading pipeline result — keyed on
+// everything that determines the OUTPUT (file bytes + subject + grade +
+// examType + the exact extraction/grading prompt versions + model), so a
+// prompt, rubric, or model change naturally misses instead of silently
+// serving a result produced by different instructions. Written once after a
+// real (non-cached) evaluation succeeds; read before every evaluation starts
+// so the identical input is graded by Gemini at most once — everyone else
+// gets the stored result, for zero additional Gemini requests. This is the
+// fix for grading being non-deterministic (see Evaluation.gradedFromCache):
+// it does not make Gemini more consistent, it makes what THIS APP serves for
+// a given file consistent, with re-evaluation as the explicit escape hatch.
+model GradingCache {
+  id            String   @id @default(cuid())
+  contentHash   String   @unique
+  modelId       String
+  promptVersion String
+  subject       String
+  grade         String
+  examType      String
+  extraction    String   @db.LongText
+  result        String   @db.LongText
+  hitCount      Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
   @@index([createdAt])
 }
 
@@ -113,37 +232,240 @@ model Feedback {
   userId       String
   user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   evaluationId String?
-  evaluation   Evaluation? @relation(fields: [evaluationId], references: [id])
+  evaluation   Evaluation? @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
   rating       Int
-  comment      String?
+  comment      String?     @db.Text
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 }
 
-model Subscription {
-  id          String   @id @default(cuid())
-  userId      String   @unique
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  plan        String   @default("FREE")
-  credits     Int      @default(10)
-  usedCredits Int      @default(0)
-  validUntil  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-}
-
 model QuestionPaper {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  subject     String
-  grade       String
-  difficulty  String
-  totalMarks  Int
-  title       String
-  content     String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject    String
+  grade      String
+  difficulty String
+  totalMarks Int
+  title      String
+  content    String   @db.LongText
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Token usage where captured (see lib/question-agents.ts) — same purpose
+  // as Evaluation.totalTokens, folded into the same daily spend estimate.
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
 
   @@index([userId])
+  @@index([createdAt])
 }
+
+// Durable source of truth for paper generation — replaces holding a single
+// serverless invocation open for the entire Planner->Generator->Reviewer
+// pipeline (which is what timed out: see generate-stream/route.ts's old
+// maxDuration=120 hitting a real "Task timed out after 120 seconds" kill in
+// production). Each worker invocation processes exactly ONE step and
+// persists state here before returning, so no single invocation needs to
+// stay alive for the whole pipeline, and killing a worker mid-job leaves a
+// row that is inspectable and retryable rather than a lost request.
+model PaperGenerationJob {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  status String @default("queued") // queued | running | succeeded | failed | cancelled
+  step   String @default("planner") // planner | generator | reviewer | validate | done
+
+  config String @db.LongText // JSON: PaperConfig, already conflict-resolved before the job is created
+
+  plannerPlan String? @db.LongText // JSON
+  draftPaper  String? @db.LongText // JSON (post generator/reviewer, pre-final-validation)
+  finalPaper  String? @db.LongText // JSON: the finished GeneratedPaper, once status = succeeded
+
+  // Per-agent status for the progress UI to poll against — { planner: {status,startedAt,finishedAt,error}, generator: {...}, reviewer: {...} }
+  agentStates String @db.LongText
+
+  repairAttempts String? @db.LongText // JSON: RepairAttemptLog[]
+  attemptCount   Int     @default(0) // retries of the CURRENT step
+  validationAttempt Int  @default(0) // which repair-loop attempt we're on (1-3)
+
+  error         String? @db.Text // user-facing message — must never contain repair-prompt fragments
+  internalError String? @db.Text // full internal detail (raw violations, etc.) for logs/debugging only
+  quotaRefunded Boolean @default(false)
+  retryWorthwhile Boolean @default(true)
+
+  // Set when a worker claims the job; used to detect a worker that died
+  // mid-step (stale lock) so the job can be recovered instead of stuck
+  // forever in "running".
+  lockedAt DateTime?
+
+  savedPaperId String? // set once saved to QuestionPaper, for the frontend to redirect to the normal paper view
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([lockedAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String
+  details   String?  @db.Text
+  ip        String?
+  status    String   @default("SUCCESS")
+  createdAt DateTime @default(now())
+}
+
+model ErrorLog {
+  id        String   @id @default(cuid())
+  type      String   // e.g. "APPLICATION", "AUTHENTICATION", "API", "DATABASE", "AI"
+  message   String   @db.Text
+  stack     String?  @db.Text
+  path      String?
+  createdAt DateTime @default(now())
+}
+
+model SystemSetting {
+  key       String   @id
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
+// Every single Gemini request, logged before this pass had no way to answer
+// "how many requests does one operation actually cost" except by reading
+// code and hoping the loop bounds were understood correctly. This is the
+// ground truth: one row per model.generateContent() call, real or replayed.
+model GeminiCallLog {
+  id               String   @id @default(cuid())
+  operation        String   // e.g. "paper_planner", "eval_grade_question", "tutor_chat"
+  model            String   // e.g. "gemini-2.5-flash"
+  agent            String?  // finer-grained than operation where relevant (e.g. question number for grading)
+  promptTokens     Int?
+  completionTokens Int?
+  totalTokens      Int?
+  isRetry          Boolean  @default(false)
+  attemptNumber    Int      @default(1)
+  success          Boolean
+  errorType        String?  // "daily_quota" | "rate_limit" | "validation_failed" | "other" | null
+  durationMs       Int?
+  replayed         Boolean  @default(false) // true when served from the record/replay cache, not a real call
+  correlationId    String?  // jobId / evaluationId, for tracing one operation's full call sequence
+  userId           String?
+  createdAt        DateTime @default(now())
+
+  @@index([operation])
+  @@index([correlationId])
+  @@index([createdAt])
+  @@index([model, createdAt])
+}
+
+// Per-user, per-day, per-feature counter enforcing the daily quota — DB-
+// backed on purpose (not in-memory) so it's correct across every
+// serverless invocation and survives restarts. "date" is a plain
+// "YYYY-MM-DD" (UTC) string, so a new day is a new row with no reset job
+// needed; see lib/quota.ts.
+model UsageCounter {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind   String // "EVALUATION" | "PAPER_GENERATION"
+  date   String // "YYYY-MM-DD" in UTC
+  count  Int    @default(0)
+
+  @@unique([userId, kind, date])
+  @@index([date])
+}
+
+model TutorConversation {
+  id           String         @id @default(cuid())
+  userId       String
+  evaluationId String         @unique
+  title        String         @default("AI Tutor Session")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  evaluation   Evaluation     @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  messages     TutorMessage[]
+
+  @@index([userId])
+  @@index([evaluationId])
+}
+
+model TutorMessage {
+  id             String            @id @default(cuid())
+  conversationId String
+  role           String            // "user" | "assistant"
+  content        String            @db.LongText
+  createdAt      DateTime          @default(now())
+
+  conversation   TutorConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model SupportTicket {
+  id           String        @id @default(cuid())
+  ticketNumber Int           @default(autoincrement()) @unique
+  userId       String?
+  name         String
+  email        String
+  category     String        // "general" | "bug" | "feature" | "other"
+  subject      String
+  message      String        @db.Text
+  status       String        @default("NEW") // "NEW" | "OPEN" | "IN_PROGRESS" | "WAITING_USER" | "RESOLVED" | "CLOSED"
+  priority     String        @default("LOW") // "LOW" | "MEDIUM" | "HIGH" | "CRITICAL"
+  ip           String?
+  userAgent    String?
+  assignedToId String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  assignedTo   User?         @relation("AssignedTickets", fields: [assignedToId], references: [id], onDelete: SetNull)
+  replies      TicketReply[]
+  notes        TicketNote[]
+
+  @@index([userId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+model TicketReply {
+  id         String        @id @default(cuid())
+  ticketId   String
+  userId     String?
+  senderType String        // "USER" | "ADMIN"
+  content    String        @db.Text
+  createdAt  DateTime      @default(now())
+
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user       User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([createdAt])
+}
+
+model TicketNote {
+  id        String        @id @default(cuid())
+  ticketId  String
+  userId    String
+  content   String        @db.Text
+  createdAt DateTime      @default(now())
+
+  ticket    SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([userId])
+  @@index([createdAt])
+}
+

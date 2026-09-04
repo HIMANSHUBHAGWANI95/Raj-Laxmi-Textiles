@@ -1,0 +1,230 @@
+.pricing-section {
+  padding: 100px 0;
+  background-color: var(--bg-primary);
+  position: relative;
+}
+
+.pricing-header {
+  text-align: center;
+  max-width: 600px;
+  margin: 0 auto 60px auto;
+}
+
+.pricing-subtitle {
+  font-size: 14px;
+  color: var(--primary);
+  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  display: inline-block;
+}
+
+.pricing-title {
+  font-size: 44px;
+  margin-bottom: 16px;
+  letter-spacing: -0.02em;
+}
+
+.pricing-desc-header {
+  color: var(--text-secondary);
+  font-size: 16px;
+}
+
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 32px;
+  align-items: stretch;
+}
+
+.pricing-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px;
+  position: relative;
+  transition: all var(--transition-normal);
+}
+
+.pricing-card:hover {
+  border-color: rgba(255, 42, 95, 0.25);
+  transform: translateY(-4px);
+}
+
+.pricing-card.popular {
+  border-color: var(--primary);
+  box-shadow: 0 10px 30px -10px rgba(255, 42, 95, 0.25);
+  transform: translateY(-8px);
+}
+
+.pricing-card.popular:hover {
+  transform: translateY(-12px);
+  border-color: var(--primary);
+}
+
+.pricing-card-popular-badge {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.pricing-tier {
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.pricing-name {
+  font-size: 28px;
+  margin-bottom: 8px;
+  font-weight: 800;
+}
+
+.pricing-price-container {
+  display: flex;
+  align-items: baseline;
+  margin-bottom: 24px;
+}
+
+.pricing-price {
+  font-family: var(--font-heading);
+  font-size: 48px;
+  font-weight: 900;
+  color: var(--text-primary);
+}
+
+.pricing-period {
+  font-size: 15px;
+  color: var(--text-secondary);
+  margin-left: 4px;
+}
+
+.pricing-desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+  min-height: 48px;
+  line-height: 1.6;
+}
+
+.pricing-features-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 40px;
+}
+
+.pricing-feature-item {
+  font-size: 14px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pricing-feature-check {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+.pricing-btn {
+  width: 100%;
+}
+
+/* Sandbox Modal Checkout CSS */
+.sandbox-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(10, 10, 12, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.sandbox-modal {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 42, 95, 0.25);
+  border-radius: var(--radius-lg);
+  padding: 40px 32px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  position: relative;
+  text-align: center;
+}
+
+.sandbox-modal::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+
+.sandbox-title {
+  font-size: 26px;
+  margin-bottom: 8px;
+  font-weight: 800;
+}
+
+.sandbox-badge {
+  display: inline-block;
+  margin-bottom: 24px;
+}
+
+.sandbox-details {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  margin-bottom: 32px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sandbox-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.sandbox-lbl {
+  color: var(--text-secondary);
+}
+
+.sandbox-val {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.sandbox-actions {
+  display: flex;
+  gap: 16px;
+}
+
+.sandbox-actions .btn {
+  flex: 1;
+}
